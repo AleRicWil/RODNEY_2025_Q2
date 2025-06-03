@@ -27,11 +27,11 @@
 #         -Plots using filtered data from the .csv file are displayed at the end of the file's execution
 
 
-import serial
+import serial   # pip install pyserial
 import sys
 import csv
 import keyboard
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression   # pip install scikit-learn
 from sklearn.preprocessing import PolynomialFeatures
 import pyqtgraph as pg
 from PyQt5 import QtWidgets, QtCore
@@ -76,10 +76,10 @@ class RealTimePlotWindow(QtWidgets.QMainWindow):
         super().__init__()
 
         # Configure the serial connection
-        self.ser = serial.Serial('COM3', 115200)  # Adjust the 'COM' # to your serial port, and the baud rate
+        self.ser = serial.Serial('COM6', 115200)  # Adjust the 'COM' # to your serial port, and the baud rate
 
         while True:
-            incoming_data = self.ser.readline().decode('utf-8').strip()
+            incoming_data = self.ser.readline().decode('utf-8', errors='ignore').strip()
             if incoming_data == "#" or keyboard.is_pressed('space'):
             #if incoming_data == "#":
                 print("Starting data collection.")
