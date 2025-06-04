@@ -26,9 +26,9 @@ dBx = 0.015
 dBy = 0.0647
 
 # the file containing the dynamic test data
-csv_path = r"C:\Users\chris\Documents\Crop Biomechanics\Stiffness Sensor Files\09_20_test_11.csv" 
+csv_path = r"Impact_test.csv" 
 
-data = pd.read_csv(csv_path, skiprows=1)
+data = pd.read_csv(csv_path, skiprows=11)
 
 csv_time_sec = data['Time (Microseconds)'].to_numpy()
 csv_strain_ax = data['Strain Ax'].to_numpy()
