@@ -22,7 +22,7 @@ dBx = 0.015
 dBy = 0.0647
 
 # the file containing the dynamic test data
-csv_path = r"C:\Users\chris\Documents\Crop Biomechanics\Stiffness Sensor Files\synthetic_stalk_data\01_31_test_2.csv" 
+csv_path = r"Impact_test.csv" 
 
 data = pd.read_csv(csv_path, skiprows=11)
 
