@@ -57,9 +57,9 @@ dBx = 0.015
 dBy = 0.0647
 
 ### Update Each Test Run ###
-date = "02_21"
-test_num = 27
-
+date = "06_05"
+test_num = 20
+ 
 ### Check Each Test Run ###
 configuration = "Config 1"
 pvc_stiffness = "Medium"
@@ -78,8 +78,12 @@ class RealTimePlotWindow(QtWidgets.QMainWindow):
         # Configure the serial connection
         self.ser = serial.Serial('COM6', 115200)  # Adjust the 'COM' # to your serial port, and the baud rate
 
+        count = 0
         while True:
+            count += 1
             incoming_data = self.ser.readline().decode('utf-8', errors='ignore').strip()
+            if count <= 1:
+                print('Waiting to press "space"')
             if incoming_data == "#" or keyboard.is_pressed('space'):
             #if incoming_data == "#":
                 print("Starting data collection.")

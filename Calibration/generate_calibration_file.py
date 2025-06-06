@@ -3,7 +3,7 @@ import pandas as pd
 import os
 import sys
 
-DIRECTORY = '05_03_angle_data'
+DIRECTORY = 'Calibration\Current Calibration'
     
 def get_files_in_directory(directory):
   files = []
@@ -15,6 +15,7 @@ def get_files_in_directory(directory):
 def fill_data(data, files):
   for file in files:
     df = pd.DataFrame([(value for value in ln.rstrip().split(',')) for ln in open(f'{os.getcwd()}/{file}').readlines()])
+    print(df[0:20])
     file_data = df.to_numpy()
     direction = file_data[15, 1].split('"')[1].strip().upper()
     mass = float(file_data[15, 2].split('kg')[0].strip())
