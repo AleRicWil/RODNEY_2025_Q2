@@ -57,8 +57,8 @@ dBx = 0.015
 dBy = 0.0647
 
 ### Update Each Test Run ###
-date = "06_05"
-test_num = 20
+date = "06_09"
+test_num = 1 
  
 ### Check Each Test Run ###
 configuration = "Config 1"
