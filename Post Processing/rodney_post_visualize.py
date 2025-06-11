@@ -18,7 +18,7 @@ cAy = -0.0785
 cBx = 0.0174
 cBy = -0.0863
 
-csv_path = r'06_09_test_1.csv'
+csv_path = r'06_11_test_1.csv'
 data = pd.read_csv(csv_path, skiprows=11)
 time_sec = data['Time (Microseconds)'].to_numpy()
 strain_ax = data['Strain Ax'].to_numpy()
