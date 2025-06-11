@@ -25,29 +25,43 @@ strain_ax = data['Strain Ax'].to_numpy()
 strain_bx = data['Strain Bx'].to_numpy()
 strain_ay = data['Strain Ay'].to_numpy()
 strain_by = data['Strain By'].to_numpy()
+strain_ax = strain_ax - np.mean(strain_ax)
+strain_ay = strain_ay - np.mean(strain_ay)
+strain_bx = strain_bx - np.mean(strain_bx)
+strain_by = strain_by - np.mean(strain_by)
+
+
 strain_ax_smooth = savgol_filter(strain_ax, 25, 2)
 strain_bx_smooth = savgol_filter(strain_bx, 25, 2)
 strain_ay_smooth = savgol_filter(strain_ay, 25, 2)
 strain_by_smooth = savgol_filter(strain_by, 25, 2)
 
-force_x = (kBx*(strain_ax_smooth - cAx) - kAx*(strain_bx_smooth - cBx))/(kAx*kBx*(dBx - dAx))
-force_y = (kBy*(strain_ay_smooth - cAy) - kAy*(strain_by_smooth - cBy))/(kAy*kBy*(dBy - dAy))
-force = np.sqrt(force_x**2 + force_y**2)
+# force_x = (kBx*(strain_ax_smooth - cAx) - kAx*(strain_bx_smooth - cBx))/(kAx*kBx*(dBx - dAx))
+# force_y = (kBy*(strain_ay_smooth - cAy) - kAy*(strain_by_smooth - cBy))/(kAy*kBy*(dBy - dAy))
+# force = np.sqrt(force_x**2 + force_y**2)
 
 
 
-base_strain_ax = strain_ax_smooth[(time_sec > 10.5) & (time_sec < 17)]
-base_val = np.mean(base_strain_ax)
+# base_strain_ax = strain_ax_smooth[(time_sec > 10.5) & (time_sec < 17)]
+# base_val = np.mean(base_strain_ax)
 
-plt.plot(time_sec, strain_ax, linewidth=0.5)
-plt.plot(time_sec, strain_ax_smooth)
-# plt.plot(time_sec, force)
+fig, axs = plt.subplots(2, 2, sharex=True, sharey=True, figsize=(8, 6))
 
-# plt.scatter(time_sec, strain_ax, s=0.5)
-# plt.plot(csv_time_sec, csv_strain_ax, linewidth=0.5)
-# plt.plot(time_sec, smooth_strain_ax, c='orange', linewidth=1)
-# plt.axhline(base_val, c='red')
+axs[0, 0].plot(time_sec, strain_ax, linewidth=0.3)
+axs[0, 0].plot(time_sec, strain_ax_smooth, label='Ax')
+axs[0, 0].legend()
 
-# plt.xlim(0,12)
-# plt.ylim(-0.04, 0.04)
+axs[0, 1].plot(time_sec, strain_ay, linewidth=0.3)
+axs[0, 1].plot(time_sec, strain_ay_smooth, label='Ay')
+axs[0, 1].legend()
+
+axs[1, 0].plot(time_sec, strain_bx, linewidth=0.3)
+axs[1, 0].plot(time_sec, strain_bx_smooth, label='Bx')
+axs[1, 0].legend()
+
+axs[1, 1].plot(time_sec, strain_by, linewidth=0.3)
+axs[1, 1].plot(time_sec, strain_by_smooth, label='By')
+axs[1, 1].legend()
+
+plt.tight_layout()
 plt.show()
