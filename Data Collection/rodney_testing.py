@@ -97,16 +97,16 @@ class RealTimePlotWindow(QtWidgets.QMainWindow):
         self.csvwriter = csv.writer(self.csvfile)
 
         pre_test_notes = [
-            ["pre_test_note_1"],
-            ["rodney configuration", configuration],
-            ["medium stiffness (Nm^2)", pvc_stiffness],
-            ["height (cm)", height],
-            ["yaw angle (degrees)", yaw],
-            ["pitch angle (degrees)", pitch],
-            ["roll angle (degrees)", roll],
-            ["rate of travel (ft/min)", rate_of_travel],
-            ["angle of travel (degrees)", angle_of_travel],
-            ["offset distance (cm)", offset_distance],
+            ["pre_test_note_1",'','','','',''],
+            ["rodney configuration", configuration,'','','',''],
+            ["medium stiffness (Nm^2)", pvc_stiffness,'','','',''],
+            ["height (cm)", height,'','','',''],
+            ["yaw angle (degrees)", yaw,'','','',''],
+            ["pitch angle (degrees)", pitch,'','','',''],
+            ["roll angle (degrees)", roll,'','','',''],
+            ["rate of travel (ft/min)", rate_of_travel,'','','',''],
+            ["angle of travel (degrees)", angle_of_travel,'','','',''],
+            ["offset distance (cm)", offset_distance,'','','',''],
             ["=================================================================="]
         ]
 
@@ -114,7 +114,7 @@ class RealTimePlotWindow(QtWidgets.QMainWindow):
             self.csvwriter.writerow(note)
 
         # Write the headers in the next row
-        headers = ['Time (Microseconds)', 'Strain Ax', 'Strain Bx', 'Strain Ay', 'Strain By', 'Current Time']
+        headers = ['Time', 'Strain Ax', 'Strain Bx', 'Strain Ay', 'Strain By', 'Current Time']
         self.csvwriter.writerow(headers)
 
         # Initialize PyQtGraph application
@@ -172,7 +172,7 @@ class RealTimePlotWindow(QtWidgets.QMainWindow):
 
                 csv_data = pd.read_csv(csv_path, skiprows=11)
 
-                csv_time_sec = csv_data['Time (Microseconds)'].to_numpy()
+                csv_time_sec = csv_data['Time'].to_numpy()
                 csv_strain_ax = csv_data['Strain Ax'].to_numpy()
                 csv_strain_bx = csv_data['Strain Bx'].to_numpy()
                 csv_strain_ay = csv_data['Strain Ay'].to_numpy()
