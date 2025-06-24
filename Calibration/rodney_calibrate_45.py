@@ -199,6 +199,6 @@ if __name__ == "__main__":
     myCalib.calc_calibration_constants()
 
     myCalib.print_calibration_constants()
-    myCalib.calculate_and_plot_forces()
+    # myCalib.calculate_and_plot_forces()
 
 

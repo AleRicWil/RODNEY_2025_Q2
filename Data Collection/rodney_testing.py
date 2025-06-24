@@ -76,7 +76,7 @@ class RealTimePlotWindow(QtWidgets.QMainWindow):
         super().__init__()
 
         # Configure the serial connection
-        self.ser = serial.Serial('COM6', 115200)  # Adjust the 'COM' # to your serial port, and the baud rate
+        self.ser = serial.Serial('COM4', 115200)  # Adjust the 'COM' # to your serial port, and the baud rate
 
         count = 0
         while True:
