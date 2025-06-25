@@ -235,9 +235,16 @@ def calculate_coefficients(calibration_data, cal_status_var):
 
         # Optional plotting for Ax strain
         V_ax_pred = model_ax.predict(A)
+        V_ay_pred = model_ay.predict(A)
         import matplotlib.pyplot as plt
+        plt.figure(1)
         plt.scatter(forces * positions, strains_ax, label='Original')
         plt.scatter(forces * positions, V_ax_pred, label='Predicted')
+        plt.legend()
+
+        plt.figure(2)
+        plt.scatter(forces * positions, strains_ay, label='Original')
+        plt.scatter(forces * positions, V_ay_pred, label='Predicted')
         plt.legend()
         plt.show()
 
