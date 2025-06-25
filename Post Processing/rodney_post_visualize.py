@@ -18,8 +18,8 @@ cAy = -0.0785
 cBx = 0.0174
 cBy = -0.0863
 
-csv_path = r'Raw Data\06_25_calibration_mass_200.0_pos_15.0.csv'
-data = pd.read_csv(csv_path, skiprows=4)
+csv_path = r'Raw Data\06_25_test_3.csv'
+data = pd.read_csv(csv_path, skiprows=11)
 time_sec = data['Time'].to_numpy()
 strain_ax = data['Strain Ax'].to_numpy()
 strain_bx = data['Strain Bx'].to_numpy()
