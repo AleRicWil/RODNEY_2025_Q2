@@ -1,11 +1,14 @@
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, filedialog
 import serial.tools.list_ports
 from collect_data import run_collection
-from calibration import run_calibration
+from calibration import run_calibration, calculate_coefficients
 from multiprocessing import Process, Queue
 import time
 from datetime import datetime
+import csv
+import os
+import numpy as np
 
 class HardwareControlUI:
     """Main UI class for controlling RODNEY hardware and collecting strain data.
@@ -40,6 +43,7 @@ class HardwareControlUI:
 
         self.status_queue = Queue()
         self.collection_process = None
+        self.calibration_data = []
 
     def create_home_page(self):
         """Create the home page with navigation buttons."""
@@ -104,10 +108,10 @@ class HardwareControlUI:
         self.cal_month_date_entry = ttk.Entry(page, textvariable=self.cal_month_date_var, width=10)
         self.cal_month_date_entry.pack(pady=5)
 
-        ttk.Label(page, text="Weights (grams, space-separated)", font=("Arial", 10)).pack(pady=5)
-        self.weights_var = tk.StringVar()
-        self.weights_entry = ttk.Entry(page, textvariable=self.weights_var, width=20)
-        self.weights_entry.pack(pady=5)
+        ttk.Label(page, text="Masses (grams, space-separated)", font=("Arial", 10)).pack(pady=5)
+        self.masses_var = tk.StringVar()
+        self.masses_entry = ttk.Entry(page, textvariable=self.masses_var, width=20)
+        self.masses_entry.pack(pady=5)
 
         ttk.Label(page, text="Positions (cm, space-separated)", font=("Arial", 10)).pack(pady=5)
         self.positions_var = tk.StringVar()
@@ -116,6 +120,12 @@ class HardwareControlUI:
 
         self.calibrate_button = ttk.Button(page, text="Start Calibration", command=self.start_calibration, state="disabled")
         self.calibrate_button.pack(pady=5)
+
+        self.load_summary_button = ttk.Button(page, text="Load Summary CSV", command=self.load_summary_csv)
+        self.load_summary_button.pack(pady=5)
+
+        self.calc_coefficients_button = ttk.Button(page, text="Calculate Coefficients", command=self.calculate_coefficients)
+        self.calc_coefficients_button.pack(pady=5)
 
         self.cal_status_var = tk.StringVar(value="Status: Idle")
         ttk.Label(page, textvariable=self.cal_status_var).pack(pady=10)
@@ -226,10 +236,10 @@ class HardwareControlUI:
         time.sleep(1)
         selected_port = self.cal_port_var.get()
         month_date = self.cal_month_date_var.get()
-        weights = self.weights_var.get()
+        masses = self.masses_var.get()
         positions = self.positions_var.get()
 
-        if not month_date or not weights or not positions:
+        if not month_date or not masses or not positions:
             self.cal_status_var.set("Status: Please enter all fields")
             self.cal_connect_button["state"] = "normal"
             self.calibrate_button["state"] = "normal"
@@ -241,19 +251,19 @@ class HardwareControlUI:
             return
 
         try:
-            weights_list = [float(w) for w in weights.split()]
+            masses_list = [float(m) for m in masses.split()]
             positions_list = [float(p) for p in positions.split()]
-            if not weights_list or not positions_list:
+            if not masses_list or not positions_list:
                 raise ValueError
         except ValueError:
-            self.cal_status_var.set("Status: Weights and positions must be numbers")
+            self.cal_status_var.set("Status: Masses and positions must be numbers")
             self.cal_connect_button["state"] = "normal"
             self.calibrate_button["state"] = "normal"
             return
 
         config = {
             "date": month_date,
-            "weights": weights_list,
+            "masses": masses_list,
             "positions": positions_list,
             "configuration": "Config 1",
             "pvc_stiffness": "Medium",
@@ -269,6 +279,38 @@ class HardwareControlUI:
         self.collection_process.start()
         self.check_status_queue()
 
+    def load_summary_csv(self):
+        """Open a file dialog to select and read a calibration summary CSV."""
+        file_path = filedialog.askopenfilename(
+            title="Select Calibration Summary CSV",
+            filetypes=[("CSV files", "*.csv")]
+        )
+        if not file_path:
+            self.cal_status_var.set("Status: No file selected")
+            return
+
+        try:
+            with open(file_path, 'r', newline='') as csvfile:
+                csvreader = csv.reader(csvfile)
+                headers = next(csvreader, None)  # Skip header
+                headers = next(csvreader, None)
+                if headers != ['Mass (g)', 'Position (cm)', 'Avg Strain Ax', 'Avg Strain Bx', 'Avg Strain Ay', 'Avg Strain By']:
+                    self.cal_status_var.set("Status: Invalid CSV format")
+                    return
+                self.calibration_data = [row for row in csvreader if row]
+                summary = f"Loaded {len(self.calibration_data)} records from {os.path.basename(file_path)}"
+                self.cal_status_var.set(f"Status: {summary}")
+        except Exception as e:
+            self.cal_status_var.set(f"Status: Error reading file: {str(e)}")
+
+    def calculate_coefficients(self):
+        """Calculate calibration coefficients using linear regression from calibration module."""
+        if not self.calibration_data:
+            self.cal_status_var.set("Status: No calibration data loaded")
+            return
+        result = calculate_coefficients(self.calibration_data, self.cal_status_var)
+        self.cal_status_var.set(f"Status: Coefficients calculated:\n{result}")
+
     def reset_collect_data_page(self):
         """Reset the Collect Data page to initial state for a new test."""
         self.connect_button["state"] = "normal" if self.available_ports else "disabled"
@@ -283,7 +325,7 @@ class HardwareControlUI:
         self.cal_connect_button["state"] = "normal" if self.cal_available_ports else "disabled"
         self.calibrate_button["state"] = "normal" if self.cal_port_var.get() else "disabled"
         self.cal_month_date_var.set(datetime.now().strftime("%m_%d"))
-        self.weights_var.set("")
+        self.masses_var.set("")
         self.positions_var.set("")
         self.cal_status_var.set("Status: Ready for new calibration")
         self.collection_process = None

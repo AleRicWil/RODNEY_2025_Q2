@@ -1,26 +1,3 @@
-# Name: Christian Shamo
-# Date: 06/24/2025
-# Description: This program handles calibration for an Arduino Uno that prints strain data for 4 wheatstone half-bridges,
-#              separated by commas, to a serial port. The user inputs weights, positions, and a date once in the UI.
-#              The program collects data for each weight-position pair in sequence (all positions for one weight,
-#              then the next weight), saving each collection to a separate CSV file in a 'Raw Data' folder (e.g.,
-#              Raw Data/MM_DD_calibration_weight_X_pos_Y.csv). The average strain for each pair is stored in a summary
-#              CSV file (e.g., Raw Data/MM_DD_calibration_summary.csv). The process mimics the data collection in
-#              collect_data.py but without real-time plotting.
-#
-# Dynamic Inputs:
-#         - date (MM_DD)
-#         - weights (list of grams)
-#         - positions (list of cm)
-#         - COM port (selected in UI; must match the Arduino program)
-# Other Inputs:
-#         - Incoming data from the serial port, printed by an Arduino Uno.
-#         - Baud rate (must match the Arduino program)
-#
-# Outputs:
-#         - Multiple .csv files in 'Raw Data', one per weight-position pair, containing strain data.
-#         - A summary .csv file with average strains for each weight-position pair.
-
 import serial
 import csv
 import keyboard
@@ -29,6 +6,7 @@ from datetime import datetime
 from multiprocessing import Queue
 import time
 import os
+from sklearn.linear_model import LinearRegression
 
 # Constants
 SUPPLY_VOLTAGE = 5
@@ -36,7 +14,7 @@ RESOLUTION = 2**9
 GAIN = 16
 
 def run_calibration(port, config, status_queue):
-    """Run calibration by collecting strain data for each weight-position pair.
+    """Run calibration by collecting strain data for each mass-position pair.
 
     Args:
         port (str): Serial port for Arduino communication.
@@ -48,10 +26,10 @@ def run_calibration(port, config, status_queue):
     summary_path = os.path.join(parent_folder, f'{config["date"]}_calibration_summary.csv')
     summary_data = []
 
-    weights = config["weights"]
+    masses = config["masses"]
     positions = config["positions"]
 
-    for weight in weights:
+    for mass in masses:
         for position in positions:
             try:
                 ser = serial.Serial(port, 115200, timeout=1)
@@ -65,19 +43,19 @@ def run_calibration(port, config, status_queue):
                 incoming_data = ser.readline().decode('utf-8', errors='ignore').strip()
                 if count <= 1:
                     time.sleep(2)
-                    status_queue.put(f"Press 'space' to start collection for weight {weight}g at {position}cm")
+                    status_queue.put(f"Press 'space' to start collection for mass {mass}g at {position}cm")
                 if incoming_data == "#" or keyboard.is_pressed('space'):
-                    status_queue.put(f"Starting data collection for weight {weight}g at {position}cm")
+                    status_queue.put(f"Starting data collection for mass {mass}g at {position}cm")
                     break
 
-            csv_path = os.path.join(parent_folder, f'{config["date"]}_calibration_weight_{weight}_pos_{position}.csv')
+            csv_path = os.path.join(parent_folder, f'{config["date"]}_calibration_mass_{mass}_pos_{position}.csv')
             strains = {'ax': [], 'bx': [], 'ay': [], 'by': []}
 
             with open(csv_path, 'w', newline='') as csvfile:
                 csvwriter = csv.writer(csvfile)
                 pre_test_notes = [
                     ["pre_test_note_1", '', '', '', '', ''],
-                    ["weight (g)", weight, '', '', '', ''],
+                    ["mass (g)", mass, '', '', '', ''],
                     ["position (cm)", position, '', '', '', ''],
                     ["=================================================================="]
                 ]
@@ -108,7 +86,7 @@ def run_calibration(port, config, status_queue):
                         current_time = now.time()
 
                         if data[0] == "test ended" or keyboard.is_pressed('space'):
-                            status_queue.put(f"Data collection ended for weight {weight}g at {position}cm")
+                            status_queue.put(f"Data collection ended for mass {mass}g at {position}cm")
                             break
 
                         if data[0] == " " or data[1] == " ":
@@ -137,7 +115,7 @@ def run_calibration(port, config, status_queue):
                         strains['ay'].append(strain_ay)
                         strains['by'].append(strain_by)
 
-                        status_queue.put(f"Press 'space' to end data collection for weight {weight}g at {position}cm")
+                        status_queue.put(f"Press 'space' to end data collection for mass {mass}g at {position}cm")
 
                     except KeyboardInterrupt:
                         status_queue.put("Interrupted by user")
@@ -156,7 +134,7 @@ def run_calibration(port, config, status_queue):
                 'ay': np.mean(strains['ay']) if strains['ay'] else 0,
                 'by': np.mean(strains['by']) if strains['by'] else 0
             }
-            summary_data.append([weight, position, avg_strains['ax'], avg_strains['bx'], avg_strains['ay'], avg_strains['by']])
+            summary_data.append([mass, position, avg_strains['ax'], avg_strains['bx'], avg_strains['ay'], avg_strains['by']])
 
     with open(summary_path, 'w', newline='') as csvfile:
         csvwriter = csv.writer(csvfile)
@@ -166,9 +144,105 @@ def run_calibration(port, config, status_queue):
         for note in pre_test_notes:
             csvwriter.writerow(note)
 
-        headers = ['Weight (g)', 'Position (cm)', 'Avg Strain Ax', 'Avg Strain Bx', 'Avg Strain Ay', 'Avg Strain By']
+        headers = ['Mass (g)', 'Position (cm)', 'Avg Strain Ax', 'Avg Strain Bx', 'Avg Strain Ay', 'Avg Strain By']
         csvwriter.writerow(headers)
         for row in summary_data:
             csvwriter.writerow(row)
 
     status_queue.put("Calibration ended")
+
+def calculate_coefficients(calibration_data, cal_status_var):
+    """Calculate calibration coefficients using multiple linear regression to directly fit k, d, and c.
+
+    Args:
+        calibration_data (list): List of rows from the calibration summary CSV.
+        cal_status_var (tk.StringVar): Tkinter variable to update the UI status.
+
+    Returns:
+        str: Formatted string of calculated coefficients.
+    """
+    if not calibration_data:
+        cal_status_var.set("Status: No calibration data loaded")
+        return ""
+
+    try:
+        # Extract and filter data, ensuring all columns are valid numbers
+        valid_data = []
+        for row in calibration_data:
+            try:
+                mass = float(row[0])
+                position = float(row[1])
+                strain_ax = float(row[2])
+                strain_bx = float(row[3])
+                strain_ay = float(row[4])
+                strain_by = float(row[5])
+                valid_data.append((mass, position, strain_ax, strain_bx, strain_ay, strain_by))
+            except ValueError:
+                continue
+
+        if not valid_data:
+            cal_status_var.set("Status: No valid data for calculation")
+            return ""
+
+        # Unpack filtered data
+        masses, positions, strains_ax, strains_bx, strains_ay, strains_by = zip(*valid_data)
+        masses = np.array(masses)
+        positions = np.array(positions)
+        strains_ax = np.array(strains_ax)
+        strains_bx = np.array(strains_bx)
+        strains_ay = np.array(strains_ay)
+        strains_by = np.array(strains_by)
+
+        # Match units
+        masses = masses * 1e-3  # g to kg
+        positions = positions * 1e-2  # cm to m
+        g = 9.80  # m/s^2
+        forces = masses * g  # Newtons
+
+        # Create design matrix A = [F*x, -F] for multiple linear regression
+        A = np.column_stack((forces * positions, -forces))
+
+        # Fit models for each strain type: V = c + k*(F*x) + beta2*(-F), where beta2 = k*d
+        model_ax = LinearRegression().fit(A, strains_ax)
+        c_ax = model_ax.intercept_
+        k_ax = model_ax.coef_[0]
+        beta2_ax = model_ax.coef_[1]
+        d_ax = beta2_ax / k_ax if k_ax != 0 else 0
+
+        model_bx = LinearRegression().fit(A, strains_bx)
+        c_bx = model_bx.intercept_
+        k_bx = model_bx.coef_[0]
+        beta2_bx = model_bx.coef_[1]
+        d_bx = beta2_bx / k_bx if k_bx != 0 else 0
+
+        model_ay = LinearRegression().fit(A, strains_ay)
+        c_ay = model_ay.intercept_
+        k_ay = model_ay.coef_[0]
+        beta2_ay = model_ay.coef_[1]
+        d_ay = beta2_ay / k_ay if k_ay != 0 else 0
+
+        model_by = LinearRegression().fit(A, strains_by)
+        c_by = model_by.intercept_
+        k_by = model_by.coef_[0]
+        beta2_by = model_by.coef_[1]
+        d_by = beta2_by / k_by if k_by != 0 else 0
+
+        # Format result
+        result = (f"Ax: k={k_ax:.6f}, d={d_ax:.6f}, c={c_ax:.6f}\n"
+                  f"Bx: k={k_bx:.6f}, d={d_bx:.6f}, c={c_bx:.6f}\n"
+                  f"Ay: k={k_ay:.6f}, d={d_ay:.6f}, c={c_ay:.6f}\n"
+                  f"By: k={k_by:.6f}, d={d_by:.6f}, c={c_by:.6f}")
+
+        # Optional plotting for Ax strain
+        V_ax_pred = model_ax.predict(A)
+        import matplotlib.pyplot as plt
+        plt.scatter(forces * positions, strains_ax, label='Original')
+        plt.scatter(forces * positions, V_ax_pred, label='Predicted')
+        plt.legend()
+        plt.show()
+
+        return result
+
+    except Exception as e:
+        cal_status_var.set(f"Status: Error calculating coefficients: {str(e)}")
+        return ""
