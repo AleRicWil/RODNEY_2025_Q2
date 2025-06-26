@@ -294,7 +294,7 @@ class HardwareControlUI:
                 csvreader = csv.reader(csvfile)
                 headers = next(csvreader, None)  # Skip header
                 headers = next(csvreader, None)
-                if headers != ['Mass (g)', 'Position (cm)', 'Avg Strain Ax', 'Avg Strain Bx', 'Avg Strain Ay', 'Avg Strain By']:
+                if headers != ['Mass (g)', 'Position (cm)', 'Avg Strain A1', 'Avg Strain B1', 'Avg Strain A2', 'Avg Strain B2']:
                     self.cal_status_var.set("Status: Invalid CSV format")
                     return
                 self.calibration_data = [row for row in csvreader if row]
@@ -308,8 +308,41 @@ class HardwareControlUI:
         if not self.calibration_data:
             self.cal_status_var.set("Status: No calibration data loaded")
             return
-        result = calculate_coefficients(self.calibration_data, self.cal_status_var)
-        self.cal_status_var.set(f"Status: Coefficients calculated:\n{result}")
+        self.calibration_coeff = calculate_coefficients(self.calibration_data, self.cal_status_var)
+        self.cal_status_var.set(f"Status: Coefficients calculated:\n{self.calibration_coeff}")
+
+        # Create AllInOne folder
+        parent_folder = 'AllInOne'
+        os.makedirs(parent_folder, exist_ok=True)
+
+        # Path for calibration history CSV
+        csv_path = os.path.join(parent_folder, 'calibration_history.csv')
+
+        # Parse coefficients
+        coeff_lines = self.calibration_coeff.split('\n')
+        coeff_data = {}
+        for line in coeff_lines:
+            if line:
+                sensor, values = line.split(': ')
+                k, d, c = [float(v.split('=')[1]) for v in values.split(', ')]
+                coeff_data[sensor] = {'k': k, 'd': d, 'c': c}
+
+        # Prepare row data
+        row = [
+            datetime.now().strftime("%m_%d_%Y"),
+            coeff_data['A1']['k'], coeff_data['B1']['k'], coeff_data['A2']['k'], coeff_data['B2']['k'],
+            coeff_data['A1']['d'], coeff_data['B1']['d'], coeff_data['A2']['d'], coeff_data['B2']['d'],
+            coeff_data['A1']['c'], coeff_data['B1']['c'], coeff_data['A2']['c'], coeff_data['B2']['c']
+        ]
+
+        # Write to CSV
+        file_exists = os.path.isfile(csv_path)
+        with open(csv_path, 'a', newline='') as csvfile:
+            csvwriter = csv.writer(csvfile)
+            if not file_exists:
+                headers = ['Date', 'k_A1', 'k_B1', 'k_A2', 'k_B2', 'd_A1', 'd_B1', 'd_A2', 'd_B2', 'c_A1', 'c_B1', 'c_A2', 'c_B2']
+                csvwriter.writerow(headers)
+            csvwriter.writerow(row)
 
     def reset_collect_data_page(self):
         """Reset the Collect Data page to initial state for a new test."""

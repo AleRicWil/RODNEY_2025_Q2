@@ -18,13 +18,13 @@ cAy = -0.0785
 cBx = 0.0174
 cBy = -0.0863
 
-csv_path = r'Raw Data\06_25_test_3.csv'
+csv_path = r'Raw Data\06_25_test_1.csv'
 data = pd.read_csv(csv_path, skiprows=11)
 time_sec = data['Time'].to_numpy()
-strain_ax = data['Strain Ax'].to_numpy()
-strain_bx = data['Strain Bx'].to_numpy()
-strain_ay = data['Strain Ay'].to_numpy()
-strain_by = data['Strain By'].to_numpy()
+strain_ax = data['Strain A1'].to_numpy()
+strain_bx = data['Strain B1'].to_numpy()
+strain_ay = data['Strain A2'].to_numpy()
+strain_by = data['Strain B2'].to_numpy()
 strain_ax = strain_ax - np.mean(strain_ax)
 strain_ay = strain_ay - np.mean(strain_ay)
 strain_bx = strain_bx - np.mean(strain_bx)

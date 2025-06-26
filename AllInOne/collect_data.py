@@ -24,15 +24,15 @@ class RealTimePlotWindow(QtWidgets.QMainWindow):
         win (pg.GraphicsLayoutWidget): PyQtGraph window for plotting.
         plot_x (pg.PlotItem): Plot for X-axis strains.
         plot_y (pg.PlotItem): Plot for Y-axis strains.
-        curve_ax (pg.PlotDataItem): Plot curve for Ax strain.
-        curve_bx (pg.PlotDataItem): Plot curve for Bx strain.
-        curve_ay (pg.PlotDataItem): Plot curve for Ay strain.
-        curve_by (pg.PlotDataItem): Plot curve for By strain.
+        curve_a1 (pg.PlotDataItem): Plot curve for A1 strain.
+        curve_b1 (pg.PlotDataItem): Plot curve for B1 strain.
+        curve_a2 (pg.PlotDataItem): Plot curve for A2 strain.
+        curve_b2 (pg.PlotDataItem): Plot curve for B2 strain.
         time_sec (np.ndarray): Array of time values.
-        strain_ax (np.ndarray): Array of Ax strain values.
-        strain_bx (np.ndarray): Array of Bx strain values.
-        strain_ay (np.ndarray): Array of Ay strain values.
-        strain_by (np.ndarray): Array of By strain values.
+        strain_a1 (np.ndarray): Array of A1 strain values.
+        strain_b1 (np.ndarray): Array of B1 strain values.
+        strain_a2 (np.ndarray): Array of A2 strain values.
+        strain_b2 (np.ndarray): Array of B2 strain values.
         time_offset (float): Time offset for data collection.
         time_offset_check (bool): Flag to set initial time offset.
         plot_time (float): Last time plotted to control update frequency.
@@ -92,7 +92,7 @@ class RealTimePlotWindow(QtWidgets.QMainWindow):
         for note in pre_test_notes:
             self.csvwriter.writerow(note)
 
-        headers = ['Time', 'Strain Ax', 'Strain Bx', 'Strain Ay', 'Strain By', 'Current Time']
+        headers = ['Time', 'Strain A1', 'Strain B1', 'Strain A2', 'Strain B2', 'Current Time']
         self.csvwriter.writerow(headers)
 
         pg.setConfigOptions(antialias=True)
@@ -100,17 +100,17 @@ class RealTimePlotWindow(QtWidgets.QMainWindow):
         self.win.resize(1500, 1000)
         self.win.move(0, 0)
         self.plot_x = self.win.addPlot(title='X Strain Vs Time')
-        self.curve_ax = self.plot_x.plot(pen='r', name='Ax Strain')
-        self.curve_bx = self.plot_x.plot(pen='b', name='Bx Strain')
+        self.curve_a1 = self.plot_x.plot(pen='r', name='A1 Strain')
+        self.curve_b1 = self.plot_x.plot(pen='b', name='B1 Strain')
         self.plot_y = self.win.addPlot(title='Y Strain Vs Time')
-        self.curve_ay = self.plot_y.plot(pen='r', name='Ay Strain')
-        self.curve_by = self.plot_y.plot(pen='b', name='By Strain')
+        self.curve_a2 = self.plot_y.plot(pen='r', name='A2 Strain')
+        self.curve_b2 = self.plot_y.plot(pen='b', name='B2 Strain')
 
         self.time_sec = np.array([])
-        self.strain_ax = np.array([])
-        self.strain_bx = np.array([])
-        self.strain_ay = np.array([])
-        self.strain_by = np.array([])
+        self.strain_a1 = np.array([])
+        self.strain_b1 = np.array([])
+        self.strain_a2 = np.array([])
+        self.strain_b2 = np.array([])
 
         self.time_offset_check = True
         self.time_offset = 0
@@ -150,10 +150,10 @@ class RealTimePlotWindow(QtWidgets.QMainWindow):
 
             try:
                 time_sec = float(data[0]) * 10**-6
-                strain_ax = float(data[1]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)
-                strain_bx = float(data[2]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)
-                strain_ay = float(data[3]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)
-                strain_by = float(data[4]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)
+                strain_a1 = float(data[1]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)
+                strain_b1 = float(data[2]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)
+                strain_a2 = float(data[3]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)
+                strain_b2 = float(data[4]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)
             except (ValueError, IndexError):
                 self.status_queue.put("Invalid data received: cannot parse values")
                 return
@@ -163,21 +163,21 @@ class RealTimePlotWindow(QtWidgets.QMainWindow):
                 self.time_offset_check = False
 
             time_sec -= self.time_offset
-            self.csvwriter.writerow([time_sec, strain_ax, strain_bx, strain_ay, strain_by, current_time])
+            self.csvwriter.writerow([time_sec, strain_a1, strain_b1, strain_a2, strain_b2, current_time])
             self.csvfile.flush()
 
             increment = 0.05
             if time_sec - self.plot_time > increment:
                 self.time_sec = np.append(self.time_sec, time_sec)
-                self.strain_ax = np.append(self.strain_ax, strain_ax)
-                self.strain_bx = np.append(self.strain_bx, strain_bx)
-                self.strain_ay = np.append(self.strain_ay, strain_ay)
-                self.strain_by = np.append(self.strain_by, strain_by)
+                self.strain_a1 = np.append(self.strain_a1, strain_a1)
+                self.strain_b1 = np.append(self.strain_b1, strain_b1)
+                self.strain_a2 = np.append(self.strain_a2, strain_a2)
+                self.strain_b2 = np.append(self.strain_b2, strain_b2)
 
-                self.curve_ax.setData(self.time_sec, self.strain_ax)
-                self.curve_bx.setData(self.time_sec, self.strain_bx)
-                self.curve_ay.setData(self.time_sec, self.strain_ay)
-                self.curve_by.setData(self.time_sec, self.strain_by)
+                self.curve_a1.setData(self.time_sec, self.strain_a1)
+                self.curve_b1.setData(self.time_sec, self.strain_b1)
+                self.curve_a2.setData(self.time_sec, self.strain_a2)
+                self.curve_b2.setData(self.time_sec, self.strain_b2)
 
                 if len(self.time_sec) > 0:
                     self.plot_x.setXRange(max(0, self.time_sec[-1] - 4), self.time_sec[-1])
