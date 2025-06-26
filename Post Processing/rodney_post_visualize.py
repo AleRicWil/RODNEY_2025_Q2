@@ -18,7 +18,7 @@ cAy = -0.0785
 cBx = 0.0174
 cBy = -0.0863
 
-csv_path = r'Raw Data\06_25_test_1.csv'
+csv_path = r'Raw Data\06_26_test_2.csv'
 data = pd.read_csv(csv_path, skiprows=11)
 time_sec = data['Time'].to_numpy()
 strain_ax = data['Strain A1'].to_numpy()
@@ -48,19 +48,19 @@ strain_by_smooth = savgol_filter(strain_by, 25, 2)
 fig, axs = plt.subplots(2, 2, sharex=True, sharey=True, figsize=(8, 6))
 
 axs[0, 0].plot(time_sec, strain_ax, linewidth=0.3)
-axs[0, 0].plot(time_sec, strain_ax_smooth, label='Ax')
+axs[0, 0].plot(time_sec, strain_ax_smooth, label='A1')
 axs[0, 0].legend()
 
 axs[0, 1].plot(time_sec, strain_ay, linewidth=0.3)
-axs[0, 1].plot(time_sec, strain_ay_smooth, label='Ay')
+axs[0, 1].plot(time_sec, strain_ay_smooth, label='A2')
 axs[0, 1].legend()
 
 axs[1, 0].plot(time_sec, strain_bx, linewidth=0.3)
-axs[1, 0].plot(time_sec, strain_bx_smooth, label='Bx')
+axs[1, 0].plot(time_sec, strain_bx_smooth, label='B1')
 axs[1, 0].legend()
 
 axs[1, 1].plot(time_sec, strain_by, linewidth=0.3)
-axs[1, 1].plot(time_sec, strain_by_smooth, label='By')
+axs[1, 1].plot(time_sec, strain_by_smooth, label='B2')
 axs[1, 1].legend()
 
 plt.tight_layout()

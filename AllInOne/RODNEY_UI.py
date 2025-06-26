@@ -3,6 +3,7 @@ from tkinter import ttk, filedialog
 import serial.tools.list_ports
 from collect_data import run_collection
 from calibration import run_calibration, calculate_coefficients
+from process import process_data
 from multiprocessing import Process, Queue
 import time
 from datetime import datetime
@@ -38,7 +39,7 @@ class HardwareControlUI:
         self.create_home_page()
         self.create_collect_data_page()
         self.create_calibrate_page()
-
+        self.create_process_data_page()
         self.show_page("Home")
 
         self.status_queue = Queue()
@@ -87,6 +88,8 @@ class HardwareControlUI:
         self.status_var = tk.StringVar(value="Status: Idle")
         ttk.Label(page, textvariable=self.status_var).pack(pady=10)
 
+        ttk.Button(page, text="Home", command=lambda: self.show_page("Home")).pack(pady=10)
+
     def create_calibrate_page(self):
         """Create the calibrate page with controls."""
         page = ttk.Frame(self.container)
@@ -130,6 +133,30 @@ class HardwareControlUI:
         self.cal_status_var = tk.StringVar(value="Status: Idle")
         ttk.Label(page, textvariable=self.cal_status_var).pack(pady=10)
 
+        ttk.Button(page, text="Home", command=lambda: self.show_page("Home")).pack(pady=10)
+
+    def create_process_data_page(self):
+        """Create the process data page with controls."""
+        page = ttk.Frame(self.container)
+        self.pages["Process Data"] = page
+
+        ttk.Label(page, text="Process Data", font=("Arial", 14)).pack(pady=10)
+
+        ttk.Label(page, text="Date (MM_DD)", font=("Arial", 10)).pack(pady=5)
+        self.process_month_date_var = tk.StringVar(value=datetime.now().strftime("%m_%d"))
+        ttk.Entry(page, textvariable=self.process_month_date_var, width=10).pack(pady=5)
+
+        ttk.Label(page, text="Test Number", font=("Arial", 10)).pack(pady=5)
+        self.process_test_num_var = tk.StringVar(value="1")
+        ttk.Entry(page, textvariable=self.process_test_num_var, width=10).pack(pady=5)
+
+        ttk.Button(page, text="Process Data", command=self.start_processing).pack(pady=5)
+
+        self.process_status_var = tk.StringVar(value="Status: Idle")
+        ttk.Label(page, textvariable=self.process_status_var).pack(pady=10)
+
+        ttk.Button(page, text="Home", command=lambda: self.show_page("Home")).pack(pady=10)
+
     def show_page(self, page_name):
         """Display the specified page.
 
@@ -163,6 +190,10 @@ class HardwareControlUI:
                 self.cal_connect_button["state"] = "disabled"
             self.calibrate_button["state"] = "disabled"
             self.cal_month_date_var.set(datetime.now().strftime("%m_%d"))
+        elif page_name == "Process Data":
+            self.process_month_date_var.set(datetime.now().strftime("%m_%d"))
+            self.process_test_num_var.set("1")
+            self.process_status_var.set("Status: Idle")
 
     def connect_arduino(self):
         """Enable data collection after selecting a port."""
@@ -343,6 +374,25 @@ class HardwareControlUI:
                 headers = ['Date', 'k_A1', 'k_B1', 'k_A2', 'k_B2', 'd_A1', 'd_B1', 'd_A2', 'd_B2', 'c_A1', 'c_B1', 'c_A2', 'c_B2']
                 csvwriter.writerow(headers)
             csvwriter.writerow(row)
+
+    def start_processing(self):
+        """Start data processing in a separate process."""
+        month_date = self.process_month_date_var.get()
+        test_num = self.process_test_num_var.get()
+
+        if not month_date or not test_num:
+            self.process_status_var.set("Status: Please enter date and test number")
+            return
+        if not month_date.replace("_", "").isdigit() or len(month_date) != 5 or month_date[2] != "_":
+            self.process_status_var.set("Status: Invalid date format (use MM_DD)")
+            return
+        if not test_num.isdigit():
+            self.process_status_var.set("Status: Test number must be a number")
+            return
+
+        self.collection_process = Process(target=process_data, args=(month_date, int(test_num)))
+        self.collection_process.start()
+        self.process_status_var.set("Status: Processing started")
 
     def reset_collect_data_page(self):
         """Reset the Collect Data page to initial state for a new test."""
