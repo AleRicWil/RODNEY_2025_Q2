@@ -36,6 +36,10 @@ def process_data(date, test_num):
     strain_a2_smooth = savgol_filter(strain_a2, 50, 2)
     strain_b2_smooth = savgol_filter(strain_b2, 50, 2)
 
+    # Initials
+    strain_a1_ini = np.mean(strain_a1_smooth[0:500])
+    strain_a2_ini = np.mean(strain_a2_smooth[0:500])
+
     # Calculate force and position
     force = (k_A2 * (strain_a1_smooth - c_A1) - k_A1 * (strain_a2_smooth - c_A2)) / (k_A1 * k_A2 * (d_A2 - d_A1))
     force = savgol_filter(force, 100, 2)
@@ -46,9 +50,11 @@ def process_data(date, test_num):
     fig1, axs = plt.subplots(2, 2, sharex=True, sharey=True, figsize=(8, 6))
     axs[0, 0].plot(time_sec, strain_a1, linewidth=0.3)
     axs[0, 0].plot(time_sec, strain_a1_smooth, label='A1')
+    axs[0, 0].axhline(strain_a1_ini, c='red', linewidth=0.5)
     axs[0, 0].legend()
     axs[0, 1].plot(time_sec, strain_a2, linewidth=0.3)
     axs[0, 1].plot(time_sec, strain_a2_smooth, label='A2')
+    axs[0, 1].axhline(strain_a2_ini, c='red', linewidth=0.5)
     axs[0, 1].legend()
     axs[1, 0].plot(time_sec, strain_b1, linewidth=0.3)
     axs[1, 0].plot(time_sec, strain_b1_smooth, label='B1')
@@ -68,3 +74,8 @@ def process_data(date, test_num):
     plt.tight_layout()
 
     plt.show()
+
+
+
+if __name__ == "__main__":
+    process_data(date='06_26', test_num='2')
