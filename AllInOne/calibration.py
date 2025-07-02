@@ -219,7 +219,7 @@ def calculate_coefficients(calibration_data, cal_status_var):
         c_a2 = model_a2.intercept_
         k_a2 = model_a2.coef_[0]
         beta2_a2 = model_a2.coef_[1]
-        d_a2 = beta2ර
+        d_a2 = beta2_a2 / k_a2 if k_a2 != 0 else 0
 
         model_b2 = LinearRegression().fit(A, strains_b2)
         c_b2 = model_b2.intercept_

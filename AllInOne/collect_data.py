@@ -129,18 +129,18 @@ class RealTimePlotWindow(QtWidgets.QMainWindow):
         pg.setConfigOptions(antialias=True)
         # Strain plot window (right)
         self.win_strain = pg.GraphicsLayoutWidget(show=True, title=f"Strain Data Plots - Test {config['test_num']}")
-        self.win_strain.resize(750, 1000)
-        self.win_strain.move(750, 0)
+        self.win_strain.resize(1000, 1000)
+        self.win_strain.move(1000, 0)
         self.plot_x = self.win_strain.addPlot(title='A1 & B1 Strain Vs Time')
         self.curve_a1 = self.plot_x.plot(pen='r', name='A1 Strain')
-        self.curve_b1 = self.plot_x.plot(pen='b', name='B1 Strain')
+        # self.curve_b1 = self.plot_x.plot(pen='b', name='B1 Strain')
         self.plot_y = self.win_strain.addPlot(title='A2 & B2 Strain Vs Time')
         self.curve_a2 = self.plot_y.plot(pen='r', name='A2 Strain')
-        self.curve_b2 = self.plot_y.plot(pen='b', name='B2 Strain')
+        # self.curve_b2 = self.plot_y.plot(pen='b', name='B2 Strain')
 
         # Force and position plot window (left)
         self.win_force_pos = pg.GraphicsLayoutWidget(show=True, title=f"Force and Position - Test {config['test_num']}")
-        self.win_force_pos.resize(750, 1000)
+        self.win_force_pos.resize(1000, 1000)
         self.win_force_pos.move(0, 0)
         self.plot_force = self.win_force_pos.addPlot(title='Force Vs Time')
         self.curve_force = self.plot_force.plot(pen='g', name='Force')
@@ -149,9 +149,9 @@ class RealTimePlotWindow(QtWidgets.QMainWindow):
 
         self.time_sec = np.array([])
         self.strain_a1 = np.array([])
-        self.strain_b1 = np.array([])
+        # self.strain_b1 = np.array([])
         self.strain_a2 = np.array([])
-        self.strain_b2 = np.array([])
+        # self.strain_b2 = np.array([])
         self.force = np.array([])
         self.position = np.array([])
 
@@ -218,27 +218,27 @@ class RealTimePlotWindow(QtWidgets.QMainWindow):
             if time_sec - self.plot_time > increment:
                 self.time_sec = np.append(self.time_sec, time_sec)
                 self.strain_a1 = np.append(self.strain_a1, strain_a1)
-                self.strain_b1 = np.append(self.strain_b1, strain_b1)
+                # self.strain_b1 = np.append(self.strain_b1, strain_b1)
                 self.strain_a2 = np.append(self.strain_a2, strain_a2)
-                self.strain_b2 = np.append(self.strain_b2, strain_b2)
+                # self.strain_b2 = np.append(self.strain_b2, strain_b2)
                 self.force = np.append(self.force, force)
                 self.position = np.append(self.position, position * 100)  # Convert to cm
 
                 # Update strain plots
                 self.curve_a1.setData(self.time_sec, self.strain_a1)
-                self.curve_b1.setData(self.time_sec, self.strain_b1)
+                # self.curve_b1.setData(self.time_sec, self.strain_b1)
                 self.curve_a2.setData(self.time_sec, self.strain_a2)
-                self.curve_b2.setData(self.time_sec, self.strain_b2)
+                # self.curve_b2.setData(self.time_sec, self.strain_b2)
 
                 # Update force and position plots
                 self.curve_force.setData(self.time_sec, self.force)
                 self.curve_pos.setData(self.time_sec, self.position)
 
                 if len(self.time_sec) > 0:
-                    self.plot_x.setXRange(max(0, self.time_sec[-1] - 4), self.time_sec[-1])
-                    self.plot_y.setXRange(max(0, self.time_sec[-1] - 4), self.time_sec[-1])
-                    self.plot_force.setXRange(max(0, self.time_sec[-1] - 4), self.time_sec[-1])
-                    self.plot_pos.setXRange(max(0, self.time_sec[-1] - 4), self.time_sec[-1])
+                    self.plot_x.setXRange(max(0, self.time_sec[-1] - 5), self.time_sec[-1])
+                    self.plot_y.setXRange(max(0, self.time_sec[-1] - 5), self.time_sec[-1])
+                    self.plot_force.setXRange(max(0, self.time_sec[-1] - 5), self.time_sec[-1])
+                    self.plot_pos.setXRange(max(0, self.time_sec[-1] - 5), self.time_sec[-1])
 
                 self.plot_time = time_sec
 
