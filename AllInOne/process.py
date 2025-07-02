@@ -31,14 +31,43 @@ def process_data(date, test_num):
     strain_b2 = data['Strain B2'].to_numpy()
 
     # Smooth strain data
-    strain_a1_smooth = savgol_filter(strain_a1, 50, 2)
-    strain_b1_smooth = savgol_filter(strain_b1, 50, 2)
-    strain_a2_smooth = savgol_filter(strain_a2, 50, 2)
-    strain_b2_smooth = savgol_filter(strain_b2, 50, 2)
+    strain_a1_smooth = savgol_filter(strain_a1, 100, 2)
+    strain_b1_smooth = savgol_filter(strain_b1, 100, 2)
+    strain_a2_smooth = savgol_filter(strain_a2, 100, 2)
+    strain_b2_smooth = savgol_filter(strain_b2, 100, 2)
 
-    # Initials
+    # Derivatives
+    strainDT_a1_smooth = savgol_filter(np.gradient(strain_a1_smooth), 100, 2)
+    strainDT_a2_smooth = savgol_filter(np.gradient(strain_a2_smooth), 100, 2)
+    strainDT_a1_smooth2 = savgol_filter(strainDT_a1_smooth, 300, 2)
+    strainDT_a2_smooth2 = savgol_filter(strainDT_a2_smooth, 300, 2)
+
+    # Find indices where strainDT_a1_smooth2 is within 0.0001 of 0
+    mask = np.abs(strainDT_a1_smooth2) < 0.00003
+    selected_time_a1 = time_sec[mask]
+    selected_strain_a1 = strain_a1_smooth[mask]
+
+    mask = np.abs(strainDT_a2_smooth2) < 0.00003
+    selected_time_a2 = time_sec[mask]
+    selected_strain_a2 = strain_a2_smooth[mask]
+
+    # Initials and drift lines
+    t_start = time_sec[0]
+    t_end = time_sec[-1]
     strain_a1_ini = np.mean(strain_a1_smooth[0:500])
     strain_a2_ini = np.mean(strain_a2_smooth[0:500])
+    strain_a1_end = np.mean(strain_a1_smooth[-500:])
+    strain_a2_end = np.mean(strain_a2_smooth[-500:])
+    
+    a1_drift_slope = (strain_a1_end - strain_a1_ini) / (t_end - t_start)
+    a2_drift_slope = (strain_a2_end - strain_a2_ini) / (t_end - t_start)
+    a1_drift = a1_drift_slope * time_sec + strain_a1_ini
+    a2_drift = a2_drift_slope * time_sec + strain_a2_ini
+
+    corrected_a1 = strain_a1_smooth - (a1_drift - strain_a1_ini)
+    corrected_a2 = strain_a2_smooth - (a2_drift - strain_a2_ini)
+    strain_a1_smooth = corrected_a1
+    strain_a2_smooth = corrected_a2
 
     # Calculate force and position
     force = (k_A2 * (strain_a1_smooth - c_A1) - k_A1 * (strain_a2_smooth - c_A2)) / (k_A1 * k_A2 * (d_A2 - d_A1))
@@ -50,17 +79,23 @@ def process_data(date, test_num):
     fig1, axs = plt.subplots(2, 2, sharex=True, sharey=True, figsize=(8, 6))
     axs[0, 0].plot(time_sec, strain_a1, linewidth=0.3)
     axs[0, 0].plot(time_sec, strain_a1_smooth, label='A1')
+    axs[0, 0].scatter(selected_time_a1, selected_strain_a1, c='red')
     axs[0, 0].axhline(strain_a1_ini, c='red', linewidth=0.5)
+    axs[0, 0].plot(time_sec, a1_drift, c='green', linewidth=0.5)
+    axs[0, 0].plot(time_sec, corrected_a1, c='purple', linewidth=0.5)
     axs[0, 0].legend()
     axs[0, 1].plot(time_sec, strain_a2, linewidth=0.3)
     axs[0, 1].plot(time_sec, strain_a2_smooth, label='A2')
+    axs[0, 1].scatter(selected_time_a2, selected_strain_a2, c='red')
     axs[0, 1].axhline(strain_a2_ini, c='red', linewidth=0.5)
+    axs[0, 1].plot(time_sec, a2_drift, c='green', linewidth=0.5)
+    axs[0, 1].plot(time_sec, corrected_a2, c='purple', linewidth=0.5)
     axs[0, 1].legend()
-    axs[1, 0].plot(time_sec, strain_b1, linewidth=0.3)
-    axs[1, 0].plot(time_sec, strain_b1_smooth, label='B1')
+    axs[1, 0].plot(time_sec, strainDT_a1_smooth, linewidth=0.3)
+    axs[1, 0].plot(time_sec, strainDT_a1_smooth2, label='A1_dt')
     axs[1, 0].legend()
-    axs[1, 1].plot(time_sec, strain_b2, linewidth=0.3)
-    axs[1, 1].plot(time_sec, strain_b2_smooth, label='B2')
+    axs[1, 1].plot(time_sec, strainDT_a2_smooth, linewidth=0.3)
+    axs[1, 1].plot(time_sec, strainDT_a2_smooth2, label='A2_dt')
     axs[1, 1].legend()
     plt.tight_layout()
 
@@ -78,4 +113,4 @@ def process_data(date, test_num):
 
 
 if __name__ == "__main__":
-    process_data(date='06_26', test_num='2')
+    process_data(date='06_27', test_num='2')
