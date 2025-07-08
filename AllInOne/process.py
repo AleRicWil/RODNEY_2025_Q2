@@ -84,8 +84,10 @@ class LabStalkRow:
         self.strain_b2 = corrected_b2
 
     def calculate_force_position(self, smooth=True, window=100, order=2):
-        self.force = (self.k_A2 * (self.strain_a1 - self.c_A1) - self.k_A1 * (self.strain_a2 - self.c_A2)) / (self.k_A1 * self.k_A2 * (self.d_A2 - self.d_A1))
-        self.position = (self.k_A2*self.d_A2*(self.strain_a1 - self.c_A1) - self.k_A1*self.d_A1*(self.strain_a2 - self.c_A2)) / (self.k_A2*(self.strain_a1 - self.c_A1) - self.k_A1*(self.strain_a2 - self.c_A2))
+        self.force = (self.k_A2*(self.strain_a1 - self.c_A1) - self.k_A1*(self.strain_a2 - self.c_A2)) / \
+                     (self.k_A1*self.k_A2*(self.d_A2 - self.d_A1))
+        self.position = (self.k_A2*self.d_A2*(self.strain_a1 - self.c_A1) - self.k_A1*self.d_A1*(self.strain_a2 - self.c_A2)) / \
+                        (self.k_A2*(self.strain_a1 - self.c_A1) - self.k_A1*(self.strain_a2 - self.c_A2))
         
         if smooth:
             self.force = savgol_filter(self.force, window, order)
