@@ -132,7 +132,7 @@ class RealTimePlotWindow(QtWidgets.QMainWindow):
         self.win_strain.resize(1000, 1000)
         self.win_strain.move(1000, 0)
         self.plot_x = self.win_strain.addPlot(title='A1 & B1 Strain Vs Time')
-        self.curve_a1 = self.plot_x.plot(pen='r', name='A1 Strain')
+        self.curve_a1 = self.plot_x.plot(pen='r', name='b1 Strain')
         # self.curve_b1 = self.plot_x.plot(pen='b', name='B1 Strain')
         self.plot_y = self.win_strain.addPlot(title='A2 & B2 Strain Vs Time')
         self.curve_a2 = self.plot_y.plot(pen='r', name='A2 Strain')
@@ -194,10 +194,10 @@ class RealTimePlotWindow(QtWidgets.QMainWindow):
 
             try:
                 time_sec = float(data[0]) * 10**-6
-                strain_a1 = float(data[1]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)
-                strain_b1 = float(data[2]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)
-                strain_a2 = float(data[3]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)
-                strain_b2 = float(data[4]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)
+                strain_a1 = float(data[2]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)   #1
+                strain_b1 = float(data[2]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)   #2
+                strain_a2 = float(data[4]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)   #3
+                strain_b2 = float(data[4]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)   #4
             except (ValueError, IndexError):
                 self.status_queue.put("Invalid data received: cannot parse values")
                 return

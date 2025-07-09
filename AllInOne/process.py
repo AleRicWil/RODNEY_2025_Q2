@@ -9,7 +9,7 @@ class LabStalkRow:
     def __init__(self, date, test_num, color):
         self.result_color = color
         self.angle = np.radians(-20)
-        self.height = 80 * 1e-2 # centimeters
+        self.height = 88 * 1e-2 # centimeters
         self.min_position = 6 * 1e-2    # centimeters
         self.max_position = 16 * 1e-2   # centimeters
         self.min_force = 2  # Newtons
@@ -79,15 +79,15 @@ class LabStalkRow:
         a2_drift_slope = (strain_a2_end - self.strain_a2_ini) / (t_end - t_start)
         b2_drift_slope = (strain_b2_end - self.strain_b2_ini) / (t_end - t_start)
 
-        a1_drift = a1_drift_slope * self.time + self.strain_a1_ini
-        b1_drift = b1_drift_slope * self.time + self.strain_b1_ini
-        a2_drift = a2_drift_slope * self.time + self.strain_a2_ini
-        b2_drift = b2_drift_slope * self.time + self.strain_b2_ini
+        self.a1_drift = a1_drift_slope * self.time + self.strain_a1_ini
+        self.b1_drift = b1_drift_slope * self.time + self.strain_b1_ini
+        self.a2_drift = a2_drift_slope * self.time + self.strain_a2_ini
+        self.b2_drift = b2_drift_slope * self.time + self.strain_b2_ini
 
-        corrected_a1 = self.strain_a1 - (a1_drift - self.strain_a1_ini)
-        corrected_b1 = self.strain_b1 - (b1_drift - self.strain_b1_ini)
-        corrected_a2 = self.strain_a2 - (a2_drift - self.strain_a2_ini)
-        corrected_b2 = self.strain_b2 - (b2_drift - self.strain_b2_ini)
+        corrected_a1 = self.strain_a1 - (self.a1_drift - self.strain_a1_ini)
+        corrected_b1 = self.strain_b1 - (self.b1_drift - self.strain_b1_ini)
+        corrected_a2 = self.strain_a2 - (self.a2_drift - self.strain_a2_ini)
+        corrected_b2 = self.strain_b2 - (self.b2_drift - self.strain_b2_ini)
 
         self.strain_a1 = corrected_a1
         self.strain_b1 = corrected_b1
@@ -230,6 +230,7 @@ class LabStalkRow:
             den = 3*pos_slope*np.sin(self.angle)
             flexural_stiffness = num/den
             self.flex_stiffs.append(flexural_stiffness)
+        results.append(self.flex_stiffs)
             
     def plot_force_position(self):
         fig, ax = plt.subplots(2, 1, sharex=True, figsize=(9.5, 4.8))
@@ -252,6 +253,13 @@ class LabStalkRow:
             ax[1].plot(self.stalk_times[i], self.stalk_positions[i]*100, c='red')
             ax[1].plot(self.stalk_times[i], self.position_fits[i]*100, c='green')
         plt.tight_layout()
+        # For verifying calibration coefficients
+        # g = 9.8
+        # ax[0].axhline(1*g, c='red', linewidth=0.5)
+        # ax[0].axhline(0.5*g, c='red', linewidth=0.5)
+        # ax[0].axhline(0.2*g, c='red', linewidth=0.5)
+        # ax[1].axhline(15, c='red', linewidth=0.5)
+        # ax[1].axhline(10, c='red', linewidth=0.5)
 
     def plot_force_position_DT(self):
         fig, ax = plt.subplots(2, 1, sharex=True, figsize=(8, 3))
@@ -280,18 +288,22 @@ class LabStalkRow:
     def plot_raw_strain(self):
         fig, axs = plt.subplots(2, 2, sharex=True, sharey=True, figsize=(8, 6))
         axs[0, 0].plot(self.time, self.strain_a1_raw, linewidth=0.3)
+        axs[0, 0].plot(self.time, self.a1_drift, linewidth=0.3)
         axs[0, 0].plot(self.time, self.strain_a1, label='A1')
         axs[0, 0].axhline(self.strain_a1_ini, c='red', linewidth=0.5)
         axs[0, 0].legend()
         axs[0, 1].plot(self.time, self.strain_a2_raw, linewidth=0.3)
+        axs[0, 1].plot(self.time, self.a2_drift, linewidth=0.3)
         axs[0, 1].plot(self.time, self.strain_a2, label='A2')
         axs[0, 1].axhline(self.strain_a2_ini, c='red', linewidth=0.5)
         axs[0, 1].legend()
         axs[1, 0].plot(self.time, self.strain_b1_raw, linewidth=0.3)
+        axs[1, 0].plot(self.time, self.b1_drift, linewidth=0.3)
         axs[1, 0].plot(self.time, self.strain_b1, label='B1')
         axs[1, 0].axhline(self.strain_b1_ini, c='red', linewidth=0.5)
         axs[1, 0].legend()
         axs[1, 1].plot(self.time, self.strain_b2_raw, linewidth=0.3)
+        axs[1, 1].plot(self.time, self.b2_drift, linewidth=0.3)
         axs[1, 1].plot(self.time, self.strain_b2, label='B2')
         axs[1, 1].axhline(self.strain_b2_ini, c='red', linewidth=0.5)
         axs[1, 1].legend()
@@ -299,7 +311,7 @@ class LabStalkRow:
 
     def plot_results(self):
         plt.figure(20)
-        plt.scatter(range(len(self.flex_stiffs)), self.flex_stiffs, c=self.result_color, s=2)
+        plt.scatter(range(1,len(self.flex_stiffs)+1), self.flex_stiffs, c=self.result_color, s=2)
         plt.xlabel('Stalk Number')
         plt.ylabel('Flexural Stiffness')
 
@@ -323,14 +335,69 @@ def process_data(date, test_num, accel_tolerance=1.0, color='red'):
     if not local_run_flag:
         plt.show()
 
+def boxpot_data():
+    results_1 = results[0:10]
+    results_2 = results[10:20]
+    results_3 = results[20:30]
+
+    low1 = [row[0] for row in results_1]
+    low2 = [row[1] for row in results_1]
+    low3 = [row[2] for row in results_1]
+    low4 = [row[3] for row in results_1]
+    low5 = [row[4] for row in results_1]
+    low6 = [row[5] for row in results_1]
+    low7 = [row[6] for row in results_1]
+    low8 = [row[7] for row in results_1]
+
+    med1 = [row[0] for row in results_2]
+    med2 = [row[1] for row in results_2]
+    med3 = [row[2] for row in results_2]
+    med4 = [row[3] for row in results_2]
+    med5 = [row[4] for row in results_2]
+    med6 = [row[5] for row in results_2]
+    med7 = [row[6] for row in results_2]
+    med8 = [row[7] for row in results_2]
+    med9 = [row[8] for row in results_2]
+
+    high1 = [row[0] for row in results_3]
+    high2 = [row[1] for row in results_3]
+    high3 = [row[2] for row in results_3]
+    high4 = [row[3] for row in results_3]
+    high5 = [row[4] for row in results_3]
+    high6 = [row[5] for row in results_3]
+    high7 = [row[6] for row in results_3]
+    high8 = [row[7] for row in results_3]
+    high9 = [row[8] for row in results_3]
+
+    plt.figure(20)
+    bp_med = plt.boxplot([med1, med2, med3, med4, med5, med6, med7, med8, med9], patch_artist=True)
+    for box in bp_med['boxes']:
+        box.set(facecolor='green')
+    
+    bp_high = plt.boxplot([high1, high2, high3, high4, high5, high6, high7, high8, high9], patch_artist=True)
+    for box in bp_high['boxes']:
+        box.set(facecolor='blue')
+
+    bp_low = plt.boxplot([low1, low2, low3, low4, low5, low6, low7, low8], patch_artist=True)
+    for box in bp_low['boxes']:
+        box.set(facecolor='red')
+    plt.ylim(0, None)
+
+
+
+results = []
 if __name__ == "__main__":
     local_run_flag = True
+    
     colors = ['red'] * 10 + ['green'] * 10 + ['blue'] * 10
-    accel_tols = [0.3]*20 + [1.0]*10
-    for i in range(11,40+1):
+    accel_tols = [1.0]*10 + [0.3]*20
+    for i in range(11, 40+1):
         process_data(date='07_03', test_num=f'{i}', accel_tolerance=accel_tols[i-11], color=colors[i-11])
-        
+    
+    boxpot_data()
 
-    # process_data(date='07_03', test_num='25')
+
+
+    # process_data(date='07_09', test_num='1')
 
     plt.show()

@@ -172,10 +172,10 @@ def calculate_coefficients(calibration_data, cal_status_var):
             try:
                 mass = float(row[0])
                 position = float(row[1])
-                strain_a1 = float(row[2])
-                strain_b1 = float(row[3])
-                strain_a2 = float(row[4])
-                strain_b2 = float(row[5])
+                strain_a1 = float(row[3])   #2
+                strain_b1 = float(row[3])   #3
+                strain_a2 = float(row[5])   #4
+                strain_b2 = float(row[5])   #5
                 valid_data.append((mass, position, strain_a1, strain_b1, strain_a2, strain_b2))
             except ValueError:
                 continue
