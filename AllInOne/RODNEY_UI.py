@@ -9,7 +9,6 @@ import time
 from datetime import datetime
 import csv
 import os
-import numpy as np
 
 class HardwareControlUI:
     """Main UI class for controlling RODNEY hardware and collecting strain data.
@@ -393,6 +392,7 @@ class HardwareControlUI:
         self.collection_process = Process(target=process_data, args=(month_date, int(test_num)))
         self.collection_process.start()
         self.process_status_var.set("Status: Processing started")
+        
 
     def reset_collect_data_page(self):
         """Reset the Collect Data page to initial state for a new test."""
