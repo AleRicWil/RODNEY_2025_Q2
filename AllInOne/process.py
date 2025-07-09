@@ -4,11 +4,15 @@ import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
 
 local_run_flag = False
+
 class LabStalkRow:
-    def __init__(self, date, test_num):
-        self.min_position = 6 * 1e-2    # centimeter
-        self.max_position = 16 * 1e-2   # centimeter
-        self.min_force = 2  # Newton
+    def __init__(self, date, test_num, color):
+        self.result_color = color
+        self.angle = np.radians(-20)
+        self.height = 80 * 1e-2 # centimeters
+        self.min_position = 6 * 1e-2    # centimeters
+        self.max_position = 16 * 1e-2   # centimeters
+        self.min_force = 2  # Newtons
         self.min_force_rate = 0.5 # Newton/second
         self.min_sequential = 20
         
@@ -203,6 +207,7 @@ class LabStalkRow:
     def calc_stalk_stiffness(self):
         self.force_fits = []
         self.position_fits = []
+        self.flex_stiffs = []
         for i in range(len(self.stalk_times)):
             time = self.stalk_times[i]
             force = self.stalk_forces[i]
@@ -219,6 +224,12 @@ class LabStalkRow:
             pos_slope = pos_coeffs[0]  # Slope of position over time
             pos_fit = np.polyval(pos_coeffs, time)
             self.position_fits.append(pos_fit)
+
+            # Calulate fluxual stiffness from slopes and system parameters
+            num = force_slope*self.height**3
+            den = 3*pos_slope*np.sin(self.angle)
+            flexural_stiffness = num/den
+            self.flex_stiffs.append(flexural_stiffness)
             
     def plot_force_position(self):
         fig, ax = plt.subplots(2, 1, sharex=True, figsize=(9.5, 4.8))
@@ -286,8 +297,14 @@ class LabStalkRow:
         axs[1, 1].legend()
         plt.tight_layout()
 
-def process_data(date, test_num, accel_tolerance=0.3):
-    test = LabStalkRow(date=date, test_num=test_num)
+    def plot_results(self):
+        plt.figure(20)
+        plt.scatter(range(len(self.flex_stiffs)), self.flex_stiffs, c=self.result_color, s=2)
+        plt.xlabel('Stalk Number')
+        plt.ylabel('Flexural Stiffness')
+
+def process_data(date, test_num, accel_tolerance=1.0, color='red'):
+    test = LabStalkRow(date=date, test_num=test_num, color=color)
     test.smooth_strains()
     test.correct_linear_drift()
     test.shift_initials()
@@ -299,6 +316,7 @@ def process_data(date, test_num, accel_tolerance=0.3):
     test.calc_stalk_stiffness()
 
     test.plot_force_position()
+    test.plot_results()
     # test.plot_force_position_DT()
     # test.plot_force_position_DDT()
     # test.plot_raw_strain()
@@ -307,8 +325,11 @@ def process_data(date, test_num, accel_tolerance=0.3):
 
 if __name__ == "__main__":
     local_run_flag = True
-    for i in range(21,30+1):
-        process_data(date='07_03', test_num=f'{i}')
+    colors = ['red'] * 10 + ['green'] * 10 + ['blue'] * 10
+    accel_tols = [0.3]*20 + [1.0]*10
+    for i in range(11,40+1):
+        process_data(date='07_03', test_num=f'{i}', accel_tolerance=accel_tols[i-11], color=colors[i-11])
+        
 
     # process_data(date='07_03', test_num='25')
 
