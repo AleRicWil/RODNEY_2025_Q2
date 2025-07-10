@@ -26,14 +26,14 @@ class HardwareControlUI:
 
     header_fields = [
         ("rodney configuration", "configuration", str),
-        ("medium stiffness (Nm^2)", "pvc_stiffness", str),
-        ("height (cm)", "height", float),
+        ("stalk array (lo, med, hi)", "pvc_stiffness", str),
+        ("sensor height (cm)", "height", float),
         ("yaw angle (degrees)", "yaw", float),
         ("pitch angle (degrees)", "pitch", float),
         ("roll angle (degrees)", "roll", float),
         ("rate of travel (ft/min)", "rate_of_travel", float),
         ("angle of travel (degrees)", "angle_of_travel", float),
-        ("offset distance (cm)", "offset_distance", float),
+        ("offset distance (cm to gauge 2)", "offset_distance", float),
     ]
 
     def __init__(self, root):
@@ -44,7 +44,7 @@ class HardwareControlUI:
         """
         self.root = root
         self.root.title("RODNEY Hardware Control")
-        self.root.geometry("400x400")
+        self.root.geometry("400x700")
 
         self.container = ttk.Frame(self.root)
         self.container.pack(fill="both", expand=True)
@@ -63,7 +63,7 @@ class HardwareControlUI:
         # Initialize last_config with default values
         self.last_config = {
             "configuration": "Config 1",
-            "pvc_stiffness": "Medium",
+            "pvc_stiffness": "Med",
             "height": 80.645,
             "yaw": 5,
             "pitch": 0,
@@ -149,7 +149,7 @@ class HardwareControlUI:
         """Open a window to edit header fields."""
         header_window = tk.Toplevel(self.root)
         header_window.title("Edit Header")
-        header_window.geometry("300x400")
+        header_window.geometry("400x700")
 
         self.config_vars = {}
         for label, key, _ in self.header_fields:
@@ -375,7 +375,7 @@ class HardwareControlUI:
             "masses": masses_list,
             "positions": positions_list,
             "configuration": "Config 1",
-            "pvc_stiffness": "Medium",
+            "pvc_stiffness": "Med",
             "height": 80.645,
             "yaw": 5,
             "pitch": 0,

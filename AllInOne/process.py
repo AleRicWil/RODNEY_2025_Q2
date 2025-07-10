@@ -34,7 +34,7 @@ class LabStalkRow:
         self.c_B2 = latest_cal['c_B2']
 
         # Load strain data
-        csv_path = rf'Raw Data\{date}_test_{test_num}.csv'
+        csv_path = rf'Raw Data\{date}\{date}_test_{test_num}.csv'
         data = pd.read_csv(csv_path, skiprows=11)
         self.time = data['Time'].to_numpy()
         self.strain_a1 = self.strain_a1_raw = data['Strain A1'].to_numpy()

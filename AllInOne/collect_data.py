@@ -99,7 +99,7 @@ class RealTimePlotWindow(QtWidgets.QMainWindow):
                 break
 
         # Create parent folder based on date
-        parent_folder = 'Raw Data'
+        parent_folder = os.path.join('Raw Data', f'{config["date"]}')
         os.makedirs(parent_folder, exist_ok=True)
 
         # Open CSV file in the parent folder
@@ -108,17 +108,17 @@ class RealTimePlotWindow(QtWidgets.QMainWindow):
         self.csvwriter = csv.writer(self.csvfile)
 
         pre_test_notes = [
-            ["pre_test_note_1", '', '', '', '', ''],
+            ["user_note", '', '', '', '', ''],
             ["rodney configuration", config["configuration"], '', '', '', ''],
-            ["medium stiffness (Nm^2)", config["pvc_stiffness"], '', '', '', ''],
-            ["height (cm)", config["height"], '', '', '', ''],
+            ["stalk array", config["pvc_stiffness"], '', '', '', ''],
+            ["sensor height (cm)", config["height"], '', '', '', ''],
             ["yaw angle (degrees)", config["yaw"], '', '', '', ''],
             ["pitch angle (degrees)", config["pitch"], '', '', '', ''],
             ["roll angle (degrees)", config["roll"], '', '', '', ''],
             ["rate of travel (ft/min)", config["rate_of_travel"], '', '', '', ''],
             ["angle of travel (degrees)", config["angle_of_travel"], '', '', '', ''],
-            ["offset distance (cm)", config["offset_distance"], '', '', '', ''],
-            ["=================================================================="]
+            ["sensor offset (cm to gauge 2)", config["offset_distance"], '', '', '', ''],
+            ["====="]
         ]
         for note in pre_test_notes:
             self.csvwriter.writerow(note)
