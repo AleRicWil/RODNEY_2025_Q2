@@ -9,7 +9,7 @@ local_run_flag = False
 results = []
 
 class LabStalkRow:
-    def __init__(self, date, test_num, color):
+    def __init__(self, date, test_num):
         self.min_position = 6 * 1e-2    # centimeters
         self.max_position = 16 * 1e-2   # centimeters
         self.min_force = 2  # Newtons
@@ -48,10 +48,13 @@ class LabStalkRow:
                     self.stalk_type = row[1]
                     if row[1] == "lo":
                         self.result_color = 'red'
+                        self.accel_tol = 1.0
                     elif row[1] == "med":
                         self.result_color = 'green'
+                        self.accel_tol = 0.3
                     elif row[1] == "hi":
                         self.result_color = 'blue'
+                        self.accel_tol = 0.3
                     param_rows += 1
                 if row[0] == "sensor height (cm)":
                     self.height = float(row[1])*1e-2
@@ -167,8 +170,8 @@ class LabStalkRow:
             self.forceDDT = savgol_filter(self.forceDDT, window, order)
             self.positionDDT = savgol_filter(self.positionDDT, window, order)
 
-    def find_stalk_interaction(self, tolerance):
-        self.near_zero_accel_indices = np.where(np.abs(self.positionDDT) < tolerance)[0]
+    def find_stalk_interaction(self):
+        self.near_zero_accel_indices = np.where(np.abs(self.positionDDT) < self.accel_tol)[0]
         self.valid_position_indices = np.where((self.position > self.min_position) & (self.position < self.max_position))[0]
         self.interaction_indices = np.intersect1d(self.near_zero_accel_indices, self.valid_position_indices)
         
@@ -211,6 +214,8 @@ class LabStalkRow:
 
     def collect_stalk_sections(self):
         gaps = np.concatenate(([0], np.diff(self.interaction_indices)))
+        big_gaps = gaps[gaps>1]
+        avg_gap = np.average(big_gaps)
 
         self.stalk_forces = []
         self.stalk_positions = []
@@ -220,17 +225,24 @@ class LabStalkRow:
         stalk_time_section = []
         
         for i in range(len(self.interaction_indices)):
-            if gaps[i] <= 1:
+            if gaps[i] <= 1:    # accumulate point on current stalk
                 stalk_force_section.append(self.stalk_force[i])
                 stalk_position_section.append(self.stalk_position[i])
                 stalk_time_section.append(self.stalk_time[i])
-            else:
+            else:               # store current stalk and reset accumulation
                 self.stalk_forces.append(np.array(stalk_force_section))
                 self.stalk_positions.append(np.array(stalk_position_section))
                 self.stalk_times.append(np.array(stalk_time_section))
                 stalk_force_section = []
                 stalk_position_section = []
                 stalk_time_section = []
+                
+                if gaps[i] >= avg_gap*1.6:  # if the gap is very large, skip next stalk number
+                    self.stalk_forces.append(np.nan)
+                    self.stalk_positions.append(np.nan)
+                    self.stalk_times.append(np.nan)
+        
+        # add the last stalk
         self.stalk_forces.append(np.array(stalk_force_section))
         self.stalk_positions.append(np.array(stalk_position_section))
         self.stalk_times.append(np.array(stalk_time_section))
@@ -240,30 +252,36 @@ class LabStalkRow:
         self.position_fits = []
         self.flex_stiffs = []
         for i in range(len(self.stalk_times)):
-            time = self.stalk_times[i]
-            force = self.stalk_forces[i]
-            position = self.stalk_positions[i]
-            
-            # Fit linear regression to force vs time
-            force_coeffs = np.polyfit(time, force, 1)
-            force_slope = force_coeffs[0]  # Slope of force over time
-            force_fit = np.polyval(force_coeffs, time)
-            self.force_fits.append(force_fit)
-            
-            # Fit linear regression to position vs time
-            pos_coeffs = np.polyfit(time, position, 1)
-            pos_slope = pos_coeffs[0]  # Slope of position over time
-            pos_fit = np.polyval(pos_coeffs, time)
-            self.position_fits.append(pos_fit)
+            if not np.isnan(self.stalk_times[i]).all():
+                time = self.stalk_times[i]
+                force = self.stalk_forces[i]
+                position = self.stalk_positions[i]
+                
+                # Fit linear regression to force vs time
+                force_coeffs = np.polyfit(time, force, 1)
+                force_slope = force_coeffs[0]  # Slope of force over time
+                force_fit = np.polyval(force_coeffs, time)
+                self.force_fits.append(force_fit)
+                
+                # Fit linear regression to position vs time
+                pos_coeffs = np.polyfit(time, position, 1)
+                pos_slope = pos_coeffs[0]  # Slope of position over time
+                pos_fit = np.polyval(pos_coeffs, time)
+                self.position_fits.append(pos_fit)
 
-            # Calulate fluxual stiffness from slopes and system parameters
-            num = force_slope*self.height**3
-            den = 3*pos_slope*np.sin(self.yaw)
-            flexural_stiffness = num/den
-            self.flex_stiffs.append(flexural_stiffness)
+                # Calulate fluxual stiffness from slopes and system parameters
+                num = force_slope*self.height**3
+                den = 3*pos_slope*np.sin(self.yaw)
+                flexural_stiffness = num/den
+                self.flex_stiffs.append(flexural_stiffness)
+            else:
+                self.force_fits.append(np.nan)
+                self.position_fits.append(np.nan)
+                self.flex_stiffs.append(np.nan)
+            
         results.append(self.flex_stiffs)
             
-    def plot_force_position(self):
+    def plot_force_position(self, view_flag=False):
         fig, ax = plt.subplots(2, 1, sharex=True, figsize=(9.5, 4.8))
         ax[0].plot(self.time, self.force, label='Force')
         # if hasattr(self, 'near_zero_accel_indices'):
@@ -278,19 +296,22 @@ class LabStalkRow:
         ax[1].set_ylabel('Position (cm)')
         # ax[1].legend()
         
-        for i in range(len(self.stalk_times)):
-            ax[0].plot(self.stalk_times[i], self.stalk_forces[i], c='red')
-            ax[0].plot(self.stalk_times[i], self.force_fits[i], c='green')
-            ax[1].plot(self.stalk_times[i], self.stalk_positions[i]*100, c='red')
-            ax[1].plot(self.stalk_times[i], self.position_fits[i]*100, c='green')
-        plt.tight_layout()
+        if not view_flag:
+            for i in range(len(self.stalk_times)):
+                if not np.isnan(self.stalk_times[i]).all():
+                    ax[0].plot(self.stalk_times[i], self.stalk_forces[i], c='red')
+                    ax[0].plot(self.stalk_times[i], self.force_fits[i], c='green')
+                    ax[1].plot(self.stalk_times[i], self.stalk_positions[i]*100, c='red')
+                    ax[1].plot(self.stalk_times[i], self.position_fits[i]*100, c='green')
+            plt.tight_layout()
         # For verifying calibration coefficients
-        # g = 9.8
-        # ax[0].axhline(1*g, c='red', linewidth=0.5)
-        # ax[0].axhline(0.5*g, c='red', linewidth=0.5)
-        # ax[0].axhline(0.2*g, c='red', linewidth=0.5)
-        # ax[1].axhline(15, c='red', linewidth=0.5)
-        # ax[1].axhline(10, c='red', linewidth=0.5)
+        else:
+            g = 9.8
+            ax[0].axhline(1*g, c='red', linewidth=0.5)
+            ax[0].axhline(0.5*g, c='red', linewidth=0.5)
+            ax[0].axhline(0.2*g, c='red', linewidth=0.5)
+            ax[1].axhline(15, c='red', linewidth=0.5)
+            ax[1].axhline(10, c='red', linewidth=0.5)
 
     def plot_force_position_DT(self):
         fig, ax = plt.subplots(2, 1, sharex=True, figsize=(8, 3))
@@ -375,24 +396,27 @@ class LabStalkRow:
                     csvwriter.writerow(headers)
                 csvwriter.writerow(row)
 
-def process_data(date, test_num, accel_tolerance=1.0, color='red'):
-    test = LabStalkRow(date=date, test_num=test_num, color=color)
+def process_data(date, test_num, view=False):
+    test = LabStalkRow(date=date, test_num=test_num)
     test.smooth_strains()
     test.correct_linear_drift()
     test.shift_initials()
     test.calculate_force_position(smooth=True, small_den_cutoff=0.00006)
     test.differentiate_force_position(smooth=True, window=100)
     test.differentiate_force_position_DT(smooth=True, window=100)
-    test.find_stalk_interaction(tolerance=accel_tolerance)
+    test.find_stalk_interaction()
     test.collect_stalk_sections()
     test.calc_stalk_stiffness()
 
-    # test.plot_force_position()
-    test.plot_results()
-    test.save_results()
-    # test.plot_force_position_DT()
-    # test.plot_force_position_DDT()
-    # test.plot_raw_strain()
+    if view:
+        test.plot_force_position(view_flag=view)
+        test.plot_raw_strain()
+        # test.plot_force_position_DT()
+        # test.plot_force_position_DDT()
+    else:
+        test.save_results()
+    
+    
     if not local_run_flag:
         plt.show()
 
@@ -407,52 +431,41 @@ def boxplot_data(rodney_config):
     med_EIs = med_results[['Stalk1', 'Stalk2', 'Stalk3', 'Stalk4', 'Stalk5', 'Stalk6', 'Stalk7', 'Stalk8', 'Stalk9']]
     hi_EIs = hi_results[['Stalk1', 'Stalk2', 'Stalk3', 'Stalk4', 'Stalk5', 'Stalk6', 'Stalk7', 'Stalk8', 'Stalk9']]
 
-    print(lo_EIs)
-
     plt.figure(20)
+    plt.title(rodney_config)
+    for _, row in lo_EIs.iloc[2:].iterrows():
+        plt.scatter(range(1, len(row) + 1), row, c='red', s=2)
     lo_EIs.boxplot(grid=False, patch_artist=True, boxprops=dict(facecolor='none', color='red'),
                    whiskerprops=dict(color='black'),
-                   capprops=dict(color='black'),
+                   capprops=dict(color='red'),
                    medianprops=dict(color='black'))
+    for _, row in med_EIs.iloc[2:].iterrows():
+        plt.scatter(range(1, len(row) + 1), row, c='green', s=2)
     med_EIs.boxplot(grid=False, patch_artist=True, boxprops=dict(facecolor='none', color='green'),
                    whiskerprops=dict(color='black'),
-                   capprops=dict(color='black'),
+                   capprops=dict(color='green'),
                    medianprops=dict(color='black'))
+    for _, row in hi_EIs.iloc[2:].iterrows():
+        plt.scatter(range(1, len(row) + 1), row, c='blue', s=2)
     hi_EIs.boxplot(grid=False, patch_artist=True, boxprops=dict(facecolor='none', color='blue'),
                    whiskerprops=dict(color='black'),
-                   capprops=dict(color='black'),
+                   capprops=dict(color='blue'),
                    medianprops=dict(color='black'))
-    # bp_low = plt.boxplot([low1, low2, low3, low4, low5, low6, low7, low8], patch_artist=True)
-    # for box in bp_low['boxes']:
-    #     box.set(facecolor='red')
-   
-
-    # bp_med = plt.boxplot([med1, med2, med3, med4, med5, med6, med7, med8, med9], patch_artist=True)
-    # for box in bp_med['boxes']:
-    #     box.set(facecolor='green')
-    
-    # bp_high = plt.boxplot([high1, high2, high3, high4, high5, high6, high7, high8, high9], patch_artist=True)
-    # for box in bp_high['boxes']:
-    #     box.set(facecolor='blue')
     plt.ylim(0, None)
     
-
-
-
-
 if __name__ == "__main__":
     local_run_flag = True
     
-    colors = ['red'] * 10 + ['green'] * 10 + ['blue'] * 10
-    accel_tols = [1.0]*10 + [0.3]*20
+    '''Batch run of same configuration'''
     for i in range(11, 40+1):
-        process_data(date='07_03', test_num=f'{i}', accel_tolerance=accel_tols[i-11], color=colors[i-11])
-    
+        process_data(date='07_03', test_num=f'{i}')
+
     boxplot_data(rodney_config='Integrated Beam Prototype 1')
-    
+    '''end batch run'''
 
 
-
-    # process_data(date='07_09', test_num='1')
+    '''Single file run and view full file. Does not save result'''
+    # process_data(date='07_10', test_num='1', view=True)
+    '''end single file run'''
 
     plt.show()
