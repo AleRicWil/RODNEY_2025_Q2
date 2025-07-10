@@ -26,11 +26,11 @@ class HardwareControlUI:
 
     header_fields = [
         ("rodney configuration", "configuration", str),
-        ("stalk array (lo, med, hi)", "pvc_stiffness", str),
+        ("stalk array (lo,med,hi)", "pvc_stiffness", str),
         ("sensor height (cm)", "height", float),
-        ("yaw angle (degrees)", "yaw", float),
-        ("pitch angle (degrees)", "pitch", float),
-        ("roll angle (degrees)", "roll", float),
+        ("sensor yaw (degrees)", "yaw", float),
+        ("sensor pitch (degrees)", "pitch", float),
+        ("sensor roll (degrees)", "roll", float),
         ("rate of travel (ft/min)", "rate_of_travel", float),
         ("angle of travel (degrees)", "angle_of_travel", float),
         ("offset distance (cm to gauge 2)", "offset_distance", float),
@@ -60,10 +60,10 @@ class HardwareControlUI:
         self.collection_process = None
         self.calibration_data = []
 
-        # Initialize last_config with default values
+        # Initialize last_config with default values (for running first time on new computer)
         self.last_config = {
             "configuration": "Config 1",
-            "pvc_stiffness": "Med",
+            "pvc_stiffness": "med",
             "height": 80.645,
             "yaw": 5,
             "pitch": 0,
@@ -155,7 +155,7 @@ class HardwareControlUI:
         for label, key, _ in self.header_fields:
             ttk.Label(header_window, text=label).pack(pady=5)
             var = tk.StringVar(value=str(self.last_config[key]))
-            entry = ttk.Entry(header_window, textvariable=var)
+            entry = ttk.Entry(header_window, textvariable=var, width=40)
             entry.pack(pady=5)
             self.config_vars[key] = var
 

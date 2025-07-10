@@ -1,41 +1,72 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import csv
+import os
 from scipy.signal import savgol_filter
 
 local_run_flag = False
+results = []
 
 class LabStalkRow:
     def __init__(self, date, test_num, color):
-        self.result_color = color
-        self.angle = np.radians(-20)
-        self.height = 88 * 1e-2 # centimeters
         self.min_position = 6 * 1e-2    # centimeters
         self.max_position = 16 * 1e-2   # centimeters
         self.min_force = 2  # Newtons
-        self.min_force_rate = 0.5 # Newton/second
+        self.min_force_rate = 0.5  # Newton/second
         self.min_sequential = 20
-        
-        # Load calibration coefficients
-        cal_csv_path = r'AllInOne\calibration_history.csv'
-        cal_data = pd.read_csv(cal_csv_path)
-        latest_cal = cal_data.iloc[-1]  # Get the most recent calibration
-        self.k_A1 = latest_cal['k_A1']
-        self.k_B1 = latest_cal['k_B1']
-        self.k_A2 = latest_cal['k_A2']
-        self.k_B2 = latest_cal['k_B2']
-        self.d_A1 = latest_cal['d_A1']
-        self.d_B1 = latest_cal['d_B1']
-        self.d_A2 = latest_cal['d_A2']
-        self.d_B2 = latest_cal['d_B2']
-        self.c_A1 = latest_cal['c_A1']
-        self.c_B1 = latest_cal['c_B1']
-        self.c_A2 = latest_cal['c_A2']
-        self.c_B2 = latest_cal['c_B2']
+        # Create results folder
+        parent_folder = os.path.join('Results')
+        os.makedirs(parent_folder, exist_ok=True)
+        self.results_path = os.path.join(parent_folder, f'results.csv')
+        self.date = date
 
-        # Load strain data
-        csv_path = rf'Raw Data\{date}\{date}_test_{test_num}.csv'
-        data = pd.read_csv(csv_path, skiprows=11)
+        # Load strain data and calibration coefficients from CSV header
+        self.csv_path = rf'Raw Data\{date}\{date}_test_{test_num}.csv'
+        with open(self.csv_path, 'r') as f:
+            reader = csv.reader(f)
+            self.header_rows = []
+            for row in reader:
+                if row[0] == "=====":
+                    break
+                self.header_rows.append(row)
+            # Find test parameter rows
+            param_rows = 0
+            for row in self.header_rows:
+                if row[0] == "rodney configuration":
+                    self.configuration = row[1]
+                    param_rows += 1
+                if row[0] == "sensor calibration (k d c)":
+                    k_str = row[1]
+                    d_str = row[2]
+                    k_values = [float(v) for v in k_str.split()]
+                    d_values = [float(v) for v in d_str.split()]
+                    self.k_A1, self.k_B1, self.k_A2, self.k_B2 = k_values
+                    self.d_A1, self.d_B1, self.d_A2, self.d_B2 = d_values
+                    param_rows += 1
+                if row[0] == "stalk array (lo med hi)":
+                    self.stalk_type = row[1]
+                    if row[1] == "lo":
+                        self.result_color = 'red'
+                    elif row[1] == "med":
+                        self.result_color = 'green'
+                    elif row[1] == "hi":
+                        self.result_color = 'blue'
+                    param_rows += 1
+                if row[0] == "sensor height (cm)":
+                    self.height = float(row[1])*1e-2
+                    param_rows += 1
+                if row[0] == "sensor yaw (degrees)":
+                    self.yaw = np.radians(-float(row[1]))
+                    param_rows += 1
+                if row[0] == "sensor offset (cm to gauge 2)":
+                    self.sensor_offset = float(row[1])
+                    param_rows += 1
+            if not param_rows >= 6:
+                raise ValueError("Test parameter rows missing in header")
+            # Read the data
+            data = pd.read_csv(f)
+
         self.time = data['Time'].to_numpy()
         self.strain_a1 = self.strain_a1_raw = data['Strain A1'].to_numpy()
         self.strain_b1 = self.strain_b1_raw = data['Strain B1'].to_numpy()
@@ -227,7 +258,7 @@ class LabStalkRow:
 
             # Calulate fluxual stiffness from slopes and system parameters
             num = force_slope*self.height**3
-            den = 3*pos_slope*np.sin(self.angle)
+            den = 3*pos_slope*np.sin(self.yaw)
             flexural_stiffness = num/den
             self.flex_stiffs.append(flexural_stiffness)
         results.append(self.flex_stiffs)
@@ -312,8 +343,37 @@ class LabStalkRow:
     def plot_results(self):
         plt.figure(20)
         plt.scatter(range(1,len(self.flex_stiffs)+1), self.flex_stiffs, c=self.result_color, s=2)
-        plt.xlabel('Stalk Number')
+        # plt.xlabel('Stalk Number')
         plt.ylabel('Flexural Stiffness')
+
+    def save_results(self):
+        # Prepare row data
+        row = [self.date, self.csv_path]
+        for header_row in self.header_rows:
+            if header_row[0] == "sensor calibration (k d c)":
+                row.append(header_row[1] + ' : ' + header_row[2] + ' : ' + header_row[3])
+            else:
+                row.append(header_row[1] if len(header_row) > 1 else '')
+        for stalk in self.flex_stiffs:
+            row.append(stalk)
+
+        # Check if file exists and if csv_path is already in the second column
+        file_exists = os.path.isfile(self.results_path)
+        write_row = True
+        if file_exists:
+            df = pd.read_csv(self.results_path)
+            if 'File' in df.columns and self.csv_path in df['File'].values:
+                write_row = False
+
+        # Write to CSV if row should be written
+        if write_row:
+            with open(self.results_path, 'a', newline='') as csvfile:
+                csvwriter = csv.writer(csvfile)
+                if not file_exists:
+                    headers = ['Date', 'File'] + [row[0] for row in self.header_rows if row[0] != "====="]
+                    headers += ['Stalk1', 'Stalk2', 'Stalk3', 'Stalk4', 'Stalk5', 'Stalk6', 'Stalk7', 'Stalk8', 'Stalk9']
+                    csvwriter.writerow(headers)
+                csvwriter.writerow(row)
 
 def process_data(date, test_num, accel_tolerance=1.0, color='red'):
     test = LabStalkRow(date=date, test_num=test_num, color=color)
@@ -327,65 +387,59 @@ def process_data(date, test_num, accel_tolerance=1.0, color='red'):
     test.collect_stalk_sections()
     test.calc_stalk_stiffness()
 
-    test.plot_force_position()
+    # test.plot_force_position()
     test.plot_results()
+    test.save_results()
     # test.plot_force_position_DT()
     # test.plot_force_position_DDT()
     # test.plot_raw_strain()
     if not local_run_flag:
         plt.show()
 
-def boxpot_data():
-    results_1 = results[0:10]
-    results_2 = results[10:20]
-    results_3 = results[20:30]
+def boxplot_data(rodney_config):
+    results_df = pd.read_csv(r'Results\results.csv')
+    config_results = results_df[results_df['rodney configuration'] == rodney_config]
+    lo_results = config_results[config_results['stalk array (lo med hi)'] == 'lo']
+    med_results = config_results[config_results['stalk array (lo med hi)'] == 'med']
+    hi_results = config_results[config_results['stalk array (lo med hi)'] == 'hi']
 
-    low1 = [row[0] for row in results_1]
-    low2 = [row[1] for row in results_1]
-    low3 = [row[2] for row in results_1]
-    low4 = [row[3] for row in results_1]
-    low5 = [row[4] for row in results_1]
-    low6 = [row[5] for row in results_1]
-    low7 = [row[6] for row in results_1]
-    low8 = [row[7] for row in results_1]
+    lo_EIs = lo_results[['Stalk1', 'Stalk2', 'Stalk3', 'Stalk4', 'Stalk5', 'Stalk6', 'Stalk7', 'Stalk8', 'Stalk9']]
+    med_EIs = med_results[['Stalk1', 'Stalk2', 'Stalk3', 'Stalk4', 'Stalk5', 'Stalk6', 'Stalk7', 'Stalk8', 'Stalk9']]
+    hi_EIs = hi_results[['Stalk1', 'Stalk2', 'Stalk3', 'Stalk4', 'Stalk5', 'Stalk6', 'Stalk7', 'Stalk8', 'Stalk9']]
 
-    med1 = [row[0] for row in results_2]
-    med2 = [row[1] for row in results_2]
-    med3 = [row[2] for row in results_2]
-    med4 = [row[3] for row in results_2]
-    med5 = [row[4] for row in results_2]
-    med6 = [row[5] for row in results_2]
-    med7 = [row[6] for row in results_2]
-    med8 = [row[7] for row in results_2]
-    med9 = [row[8] for row in results_2]
-
-    high1 = [row[0] for row in results_3]
-    high2 = [row[1] for row in results_3]
-    high3 = [row[2] for row in results_3]
-    high4 = [row[3] for row in results_3]
-    high5 = [row[4] for row in results_3]
-    high6 = [row[5] for row in results_3]
-    high7 = [row[6] for row in results_3]
-    high8 = [row[7] for row in results_3]
-    high9 = [row[8] for row in results_3]
+    print(lo_EIs)
 
     plt.figure(20)
-    bp_med = plt.boxplot([med1, med2, med3, med4, med5, med6, med7, med8, med9], patch_artist=True)
-    for box in bp_med['boxes']:
-        box.set(facecolor='green')
+    lo_EIs.boxplot(grid=False, patch_artist=True, boxprops=dict(facecolor='none', color='red'),
+                   whiskerprops=dict(color='black'),
+                   capprops=dict(color='black'),
+                   medianprops=dict(color='black'))
+    med_EIs.boxplot(grid=False, patch_artist=True, boxprops=dict(facecolor='none', color='green'),
+                   whiskerprops=dict(color='black'),
+                   capprops=dict(color='black'),
+                   medianprops=dict(color='black'))
+    hi_EIs.boxplot(grid=False, patch_artist=True, boxprops=dict(facecolor='none', color='blue'),
+                   whiskerprops=dict(color='black'),
+                   capprops=dict(color='black'),
+                   medianprops=dict(color='black'))
+    # bp_low = plt.boxplot([low1, low2, low3, low4, low5, low6, low7, low8], patch_artist=True)
+    # for box in bp_low['boxes']:
+    #     box.set(facecolor='red')
+   
+
+    # bp_med = plt.boxplot([med1, med2, med3, med4, med5, med6, med7, med8, med9], patch_artist=True)
+    # for box in bp_med['boxes']:
+    #     box.set(facecolor='green')
     
-    bp_high = plt.boxplot([high1, high2, high3, high4, high5, high6, high7, high8, high9], patch_artist=True)
-    for box in bp_high['boxes']:
-        box.set(facecolor='blue')
-
-    bp_low = plt.boxplot([low1, low2, low3, low4, low5, low6, low7, low8], patch_artist=True)
-    for box in bp_low['boxes']:
-        box.set(facecolor='red')
+    # bp_high = plt.boxplot([high1, high2, high3, high4, high5, high6, high7, high8, high9], patch_artist=True)
+    # for box in bp_high['boxes']:
+    #     box.set(facecolor='blue')
     plt.ylim(0, None)
+    
 
 
 
-results = []
+
 if __name__ == "__main__":
     local_run_flag = True
     
@@ -394,7 +448,8 @@ if __name__ == "__main__":
     for i in range(11, 40+1):
         process_data(date='07_03', test_num=f'{i}', accel_tolerance=accel_tols[i-11], color=colors[i-11])
     
-    boxpot_data()
+    boxplot_data(rodney_config='Integrated Beam Prototype 1')
+    
 
 
 

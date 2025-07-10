@@ -1,14 +1,15 @@
-pre_test_note_1,,,,,
-rodney configuration,Config 1,,,,
-medium stiffness (Nm^2),Medium,,,,
-height (cm),80.645,,,,
-yaw angle (degrees),5,,,,
-pitch angle (degrees),0,,,,
-roll angle (degrees),0,,,,
-rate of travel (ft/min),25,,,,
-angle of travel (degrees),0,,,,
-offset distance (cm),25,,,,
-==================================================================
+user_note,,,,,
+rodney configuration,Integrated Beam Prototype 1,,,,
+sensor calibration (k d c),-0.047269 -5e-06 -0.046184 5.6e-05,0.009066 -1.854254 0.052102 -0.06902,0.280633 0.004403 0.101502 0.014988,,
+stalk array (lo med hi),med,,,,
+sensor height (cm),88.0,,,,
+sensor yaw (degrees),20.0,,,,
+sensor pitch (degrees),0.0,,,,
+sensor roll (degrees),0.0,,,,
+rate of travel (ft/min),25.0,,,,
+angle of travel (degrees),0.0,,,,
+sensor offset (cm to gauge 2),12.0,,,,
+=====
 Time,Strain A1,Strain B1,Strain A2,Strain B2,Current Time
 0.0,0.2392578125,0.0042724609375,-0.2703857421875,0.015869140625,12:26:34.311901
 0.0039799999999998725,0.2392578125,0.003662109375,-0.2716064453125,0.0140380859375,12:26:34.316477
