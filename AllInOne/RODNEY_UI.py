@@ -9,6 +9,7 @@ import time
 from datetime import datetime
 import csv
 import os
+import json
 
 class HardwareControlUI:
     """Main UI class for controlling RODNEY hardware and collecting strain data.
@@ -19,7 +20,21 @@ class HardwareControlUI:
         pages (dict): Dictionary mapping page names to their frames.
         status_queue (Queue): Queue for receiving status messages from collection process.
         collection_process (Process): Current data collection process, if running.
+        last_config (dict): Last used configuration for header fields.
+        header_fields (list): List of tuples defining header fields, their keys, and types.
     """
+
+    header_fields = [
+        ("rodney configuration", "configuration", str),
+        ("medium stiffness (Nm^2)", "pvc_stiffness", str),
+        ("height (cm)", "height", float),
+        ("yaw angle (degrees)", "yaw", float),
+        ("pitch angle (degrees)", "pitch", float),
+        ("roll angle (degrees)", "roll", float),
+        ("rate of travel (ft/min)", "rate_of_travel", float),
+        ("angle of travel (degrees)", "angle_of_travel", float),
+        ("offset distance (cm)", "offset_distance", float),
+    ]
 
     def __init__(self, root):
         """Initialize the UI.
@@ -44,6 +59,44 @@ class HardwareControlUI:
         self.status_queue = Queue()
         self.collection_process = None
         self.calibration_data = []
+
+        # Initialize last_config with default values
+        self.last_config = {
+            "configuration": "Config 1",
+            "pvc_stiffness": "Medium",
+            "height": 80.645,
+            "yaw": 5,
+            "pitch": 0,
+            "roll": 0,
+            "rate_of_travel": 25,
+            "angle_of_travel": 0,
+            "offset_distance": 25,
+        }
+        self.load_config()
+
+    def load_config(self):
+        """Load last_config from config.json if it exists."""
+        config_path = os.path.join('AllInOne', 'config.json')
+        try:
+            if os.path.exists(config_path):
+                with open(config_path, 'r') as f:
+                    loaded_config = json.load(f)
+                    for key, value in loaded_config.items():
+                        if key in self.last_config:
+                            type_func = next(field[2] for field in self.header_fields if field[1] == key)
+                            self.last_config[key] = type_func(value)
+        except Exception as e:
+            self.status_var.set(f"Error loading config: {str(e)}") if hasattr(self, 'status_var') else None
+
+    def save_config(self):
+        """Save last_config to config.json."""
+        config_path = os.path.join('AllInOne', 'config.json')
+        try:
+            os.makedirs('AllInOne', exist_ok=True)
+            with open(config_path, 'w') as f:
+                json.dump(self.last_config, f, indent=4)
+        except Exception as e:
+            self.status_var.set(f"Error saving config: {str(e)}")
 
     def create_home_page(self):
         """Create the home page with navigation buttons."""
@@ -81,6 +134,9 @@ class HardwareControlUI:
         self.test_num_entry = ttk.Entry(page, textvariable=self.test_num_var, width=10)
         self.test_num_entry.pack(pady=5)
 
+        self.edit_header_button = ttk.Button(page, text="Edit Header", command=self.edit_header)
+        self.edit_header_button.pack(pady=5)
+
         self.start_button = ttk.Button(page, text="Start Data Collection", command=self.start_collection, state="disabled")
         self.start_button.pack(pady=5)
 
@@ -88,6 +144,36 @@ class HardwareControlUI:
         ttk.Label(page, textvariable=self.status_var).pack(pady=10)
 
         ttk.Button(page, text="Home", command=lambda: self.show_page("Home")).pack(pady=10)
+
+    def edit_header(self):
+        """Open a window to edit header fields."""
+        header_window = tk.Toplevel(self.root)
+        header_window.title("Edit Header")
+        header_window.geometry("300x400")
+
+        self.config_vars = {}
+        for label, key, _ in self.header_fields:
+            ttk.Label(header_window, text=label).pack(pady=5)
+            var = tk.StringVar(value=str(self.last_config[key]))
+            entry = ttk.Entry(header_window, textvariable=var)
+            entry.pack(pady=5)
+            self.config_vars[key] = var
+
+        save_button = ttk.Button(header_window, text="Save", command=lambda: self.save_header(header_window))
+        save_button.pack(pady=10)
+
+    def save_header(self, window):
+        """Save the edited header fields to last_config and config.json."""
+        for label, key, type_func in self.header_fields:
+            value = self.config_vars[key].get()
+            try:
+                self.last_config[key] = type_func(value)
+            except ValueError:
+                self.status_var.set(f"Invalid value for {label}: must be a {type_func.__name__}")
+                return
+        self.save_config()
+        window.destroy()
+        self.status_var.set("Header updated")
 
     def create_calibrate_page(self):
         """Create the calibrate page with controls."""
@@ -179,6 +265,7 @@ class HardwareControlUI:
             self.month_date_var.set(datetime.now().strftime("%m_%d"))
             self.test_num_var.set("1")
         elif page_name == "Calibrate":
+
             self.cal_available_ports = [port.device for port in serial.tools.list_ports.comports()]
             self.cal_port_combobox["values"] = self.cal_available_ports
             if self.cal_available_ports:
@@ -245,16 +332,8 @@ class HardwareControlUI:
         config = {
             "date": month_date,
             "test_num": int(test_num),
-            "configuration": "Config 1",
-            "pvc_stiffness": "Medium",
-            "height": 80.645,
-            "yaw": 5,
-            "pitch": 0,
-            "roll": 0,
-            "rate_of_travel": 25,
-            "angle_of_travel": 0,
-            "offset_distance": 25,
         }
+        config.update(self.last_config)
         self.collection_process = Process(target=run_collection, args=(selected_port, config, self.status_queue))
         self.collection_process.start()
         self.check_status_queue()
@@ -392,7 +471,6 @@ class HardwareControlUI:
         self.collection_process = Process(target=process_data, args=(month_date, int(test_num)))
         self.collection_process.start()
         self.process_status_var.set("Status: Processing started")
-        
 
     def reset_collect_data_page(self):
         """Reset the Collect Data page to initial state for a new test."""
