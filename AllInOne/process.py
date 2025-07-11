@@ -1,19 +1,25 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import scipy.stats as stats
 import csv
 import os
 from scipy.signal import savgol_filter
+from itertools import product
+from scipy.optimize import minimize
 
 local_run_flag = False
 results = []
 
 class LabStalkRow:
-    def __init__(self, date, test_num):
+    def __init__(self, date, test_num, min_force_rate=0.3,
+                 lo_pos_accel_tol=1.0, med_pos_accel_tol=0.5, hi_pos_accel_tol=0.5,
+                 lo_force_accel_tol=25.0, med_force_accel_tol=30.0, hi_force_accel_tol=40.0):
+        
         self.min_position = 6 * 1e-2    # centimeters
         self.max_position = 16 * 1e-2   # centimeters
         self.min_force = 2  # Newtons
-        self.min_force_rate = 0.3  # Newton/second
+        self.min_force_rate = min_force_rate  # Newton/second
         self.min_sequential = 20
         # Create results folder
         parent_folder = os.path.join('Results')
@@ -48,16 +54,16 @@ class LabStalkRow:
                     self.stalk_type = row[1]
                     if row[1] == "lo":
                         self.result_color = 'red'
-                        self.pos_accel_tol = 1.0
-                        self.force_accel_tol = 25.0
+                        self.pos_accel_tol = lo_pos_accel_tol
+                        self.force_accel_tol = lo_force_accel_tol
                     elif row[1] == "med":
                         self.result_color = 'green'
-                        self.pos_accel_tol = 0.5
-                        self.force_accel_tol = 30.0
+                        self.pos_accel_tol = med_pos_accel_tol
+                        self.force_accel_tol = med_force_accel_tol
                     elif row[1] == "hi":
                         self.result_color = 'blue'
-                        self.pos_accel_tol = 0.5
-                        self.force_accel_tol = 40.0
+                        self.pos_accel_tol = hi_pos_accel_tol
+                        self.force_accel_tol = hi_force_accel_tol
                     param_rows += 1
                 if row[0] == "sensor height (cm)":
                     self.height = float(row[1])*1e-2
@@ -157,7 +163,7 @@ class LabStalkRow:
             self.force = savgol_filter(self.force, window, order)
             self.position = savgol_filter(self.position, window, order)
 
-    def differentiate_force_position(self, smooth=True, window=150, order=2):
+    def differentiate_force_position(self, smooth=True, window=100, order=2):
         self.forceDT = np.gradient(self.force, self.time)
         self.positionDT = np.gradient(self.position, self.time)
 
@@ -165,7 +171,7 @@ class LabStalkRow:
             self.forceDT = savgol_filter(self.forceDT, window, order)
             self.positionDT = savgol_filter(self.positionDT, window, order)
 
-    def differentiate_force_position_DT(self, smooth=True, window=200, order=2):
+    def differentiate_force_position_DT(self, smooth=True, window=100, order=2):
         self.forceDDT = np.gradient(self.forceDT, self.time)
         self.positionDDT = np.gradient(self.positionDT, self.time)
 
@@ -377,14 +383,22 @@ class LabStalkRow:
     def save_results(self, overwrite_result=False):
         # Prepare row data
         row = [self.date, self.csv_path]
+        numeric_headers = ['sensor height (cm)', 'sensor yaw (degrees)', 'sensor pitch (degrees)', 'sensor roll (degrees)',
+                           'rate of travel (ft/min)', 'angle of travel (degrees)', 'sensor offset (cm to gauge 2)']
         for header_row in self.header_rows:
             if header_row[0] == "sensor calibration (k d c)":
-                row.append(header_row[1] + ' : ' + header_row[2] + ' : ' + header_row[3])
+                row.append(header_row[1] + ' : ' + header_row[2] + ' : ' + header_row[3])  # Keep as string
             else:
-                row.append(header_row[1] if len(header_row) > 1 else '')
-        row += [self.pos_accel_tol, self.force_accel_tol]
+                value = header_row[1] if len(header_row) > 1 else ''
+                if header_row[0] in numeric_headers and value == '':
+                    row.append(np.nan)  # Use np.nan for empty numeric fields
+                elif header_row[0] in numeric_headers:
+                    row.append(float(value))  # Cast numeric strings to float
+                else:
+                    row.append(value)  # Keep as string or empty string
+        row += [float(self.pos_accel_tol), float(self.force_accel_tol)]
         for stalk in self.flex_stiffs:
-            row.append(stalk)
+            row.append(float(stalk) if not np.isnan(stalk) else np.nan)
 
         # Check if file exists
         file_exists = os.path.isfile(self.results_path)
@@ -392,11 +406,44 @@ class LabStalkRow:
         headers += ['positionDDT_tol', 'forceDDT_tol']
         headers += ['Stalk1', 'Stalk2', 'Stalk3', 'Stalk4', 'Stalk5', 'Stalk6', 'Stalk7', 'Stalk8', 'Stalk9']
 
+        # Define dtypes for columns
+        dtype_dict = {
+            'Date': 'object',
+            'File': 'object',
+            'user_note': 'object',
+            'rodney configuration': 'object',
+            'sensor calibration (k d c)': 'object',
+            'stalk array (lo med hi)': 'object',
+            'sensor height (cm)': 'float64',
+            'sensor yaw (degrees)': 'float64',
+            'sensor pitch (degrees)': 'float64',
+            'sensor roll (degrees)': 'float64',
+            'rate of travel (ft/min)': 'float64',
+            'angle of travel (degrees)': 'float64',
+            'sensor offset (cm to gauge 2)': 'float64',
+            'positionDDT_tol': 'float64',
+            'forceDDT_tol': 'float64',
+            'Stalk1': 'float64',
+            'Stalk2': 'float64',
+            'Stalk3': 'float64',
+            'Stalk4': 'float64',
+            'Stalk5': 'float64',
+            'Stalk6': 'float64',
+            'Stalk7': 'float64',
+            'Stalk8': 'float64',
+            'Stalk9': 'float64'
+        }
+
         if file_exists:
             df = pd.read_csv(self.results_path)
+            # Ensure DataFrame has correct dtypes
+            for col, dtype in dtype_dict.items():
+                if col in df.columns:
+                    df[col] = df[col].astype(dtype)
             if 'File' in df.columns and self.csv_path in df['File'].values and overwrite_result:
                 # Overwrite existing row
-                df.loc[df['File'] == self.csv_path, headers] = row
+                for col, val in zip(headers, row):
+                    df.loc[df['File'] == self.csv_path, col] = val
                 df.to_csv(self.results_path, index=False)
                 return
 
@@ -406,30 +453,6 @@ class LabStalkRow:
             if not file_exists:
                 csvwriter.writerow(headers)
             csvwriter.writerow(row)
-
-def process_data(date, test_num, view=False, overwrite=False):
-    test = LabStalkRow(date=date, test_num=test_num)
-    test.smooth_strains()
-    test.correct_linear_drift()
-    test.shift_initials()
-    test.calculate_force_position(smooth=True, small_den_cutoff=0.00006)
-    test.differentiate_force_position(smooth=True, window=100)
-    test.differentiate_force_position_DT(smooth=True, window=100)
-    test.find_stalk_interaction()
-    test.collect_stalk_sections()
-    test.calc_stalk_stiffness()
-
-    if view:
-        test.plot_force_position(view_flag=False)
-        # test.plot_raw_strain()
-        # test.plot_force_position_DT()
-        # test.plot_force_position_DDT()
-    else:
-        test.save_results(overwrite_result=True)
-    
-    
-    if not local_run_flag:
-        plt.show()
 
 def boxplot_data(rodney_config, plot_num=20):
     results_df = pd.read_csv(r'Results\results.csv')
@@ -463,22 +486,367 @@ def boxplot_data(rodney_config, plot_num=20):
                    capprops=dict(color='blue'),
                    medianprops=dict(color='black'))
     plt.ylim(0, None)
+
+def get_stats(rodney_config, plot_num=None):
+    def get_ci(data, type_mean, confidence=0.95):
+        n = len(data)
+        mean = np.mean(data)
+        sem = stats.sem(data)
+        ci = stats.t.interval(confidence, df=n-1, loc=mean, scale=sem)
+        margin = stats.t.ppf((1 + confidence) / 2, df=n-1) * sem
+        rel_margin = margin / type_mean if type_mean != 0 else 0  # Relative margin
+        return {'interval': ci, 'mean': mean, 'margin': margin, 'rel_margin': rel_margin}
     
+    results_df = pd.read_csv(r'Results\results.csv')
+    config_results = results_df[results_df['rodney configuration'] == rodney_config]
+    lo_results = config_results[config_results['stalk array (lo med hi)'] == 'lo']
+    med_results = config_results[config_results['stalk array (lo med hi)'] == 'med']
+    hi_results = config_results[config_results['stalk array (lo med hi)'] == 'hi']
+
+    lo_EIs = lo_results[['Stalk1', 'Stalk2', 'Stalk3', 'Stalk4', 'Stalk5', 'Stalk6', 'Stalk7', 'Stalk8', 'Stalk9']]
+    med_EIs = med_results[['Stalk1', 'Stalk2', 'Stalk3', 'Stalk4', 'Stalk5', 'Stalk6', 'Stalk7', 'Stalk8', 'Stalk9']]
+    hi_EIs = hi_results[['Stalk1', 'Stalk2', 'Stalk3', 'Stalk4', 'Stalk5', 'Stalk6', 'Stalk7', 'Stalk8', 'Stalk9']]
+
+    lo_stats = lo_EIs.describe()
+    lo_mean = np.mean(lo_stats.loc['mean'])
+    lo_ci = {col: get_ci(lo_EIs[col], lo_mean) for col in lo_EIs.columns} 
+    lo_relMargins = np.array([lo_ci[col]['rel_margin'] for col in lo_EIs.columns])
+
+    med_stats = med_EIs.describe()
+    med_mean = np.mean(med_stats.loc['mean'])
+    med_ci = {col: get_ci(med_EIs[col], med_mean) for col in med_EIs.columns}
+    med_relMargins = np.array([med_ci[col]['rel_margin'] for col in med_EIs.columns])
+
+    hi_stats = hi_EIs.describe()
+    hi_mean = np.mean(hi_stats.loc['mean'])
+    hi_ci = {col: get_ci(hi_EIs[col], hi_mean) for col in hi_EIs.columns}
+    hi_relMargins = np.array([hi_ci[col]['rel_margin'] for col in hi_EIs.columns])
+
+    all_relMargins = np.append(np.append(lo_relMargins, med_relMargins), hi_relMargins)
+    all_relMargins_mean = np.nanmean(all_relMargins)
+    medhi_relMargins = np.append(med_relMargins, hi_relMargins)
+    medhi_relMargins_mean = np.nanmean(medhi_relMargins)
+
+
+    if plot_num is not None:
+        plt.figure(plot_num)
+        plt.scatter(range(1, len(lo_relMargins)+1), lo_relMargins*100, label='lo', c='red')
+        plt.scatter(range(1, len(med_relMargins)+1), med_relMargins*100, label='med', c='green')
+        plt.scatter(range(1, len(hi_relMargins)+1), hi_relMargins*100, label='hi', c='blue')
+        plt.axhline(all_relMargins_mean*100, c='black')
+        plt.axhline(medhi_relMargins_mean*100, c='brown')
+    
+        plt.ylabel('% Relative Error Margin')
+        plt.title('Error Margin Relative to Mean of Stalk Type')
+        plt.legend()
+
+    return all_relMargins_mean
+
+# Optimization functions
+def get_all_tests(date):
+    test_nums = []
+    for file in os.listdir(f'Raw Data/{date}'):
+        if file.endswith('.csv'):
+            test_num = file.split('_test_')[1].split('.csv')[0]
+            test_nums.append(test_num)
+    return test_nums
+
+def get_config(date, test_num):
+    csv_path = f'Raw Data/{date}/{date}_test_{test_num}.csv'
+    with open(csv_path, 'r') as f:
+        reader = csv.reader(f)
+        for row in reader:
+            if row[0] == "rodney configuration":
+                return row[1]
+    return None
+
+def get_tests_for_config(date, rodney_config):
+    tests = []
+    for test_num in get_all_tests(date):
+        config = get_config(date, test_num)
+        if config == rodney_config:
+            tests.append(test_num)
+    return tests
+
+# def optimize_parameters(dates, rodney_config):
+#     all_tests = []
+#     for date in dates:
+#         test_nums = get_tests_for_config(date, rodney_config)
+#         for test_num in test_nums:
+#             all_tests.append((date, test_num))
+#     print(f'Found {len(all_tests)} files for {rodney_config}')
+    
+#     # Define objective function
+#     def objective(params):
+#         min_force_rate, lo_pos_accel_tol, med_pos_accel_tol, hi_pos_accel_tol, \
+#         lo_force_accel_tol, med_force_accel_tol, hi_force_accel_tol = params
+
+#         # Process all tests with these parameters
+#         for date, test_num in all_tests:
+#             test = LabStalkRow(date=date, test_num=test_num,
+#                                min_force_rate=min_force_rate,
+#                                lo_pos_accel_tol=lo_pos_accel_tol,
+#                                med_pos_accel_tol=med_pos_accel_tol,
+#                                hi_pos_accel_tol=hi_pos_accel_tol,
+#                                lo_force_accel_tol=lo_force_accel_tol,
+#                                med_force_accel_tol=med_force_accel_tol,
+#                                hi_force_accel_tol=hi_force_accel_tol)
+#             test.smooth_strains()
+#             test.correct_linear_drift()
+#             test.shift_initials()
+#             test.calculate_force_position(smooth=True, small_den_cutoff=0.00006)
+#             test.differentiate_force_position(smooth=True, window=100)
+#             test.differentiate_force_position_DT(smooth=True, window=100)
+#             test.find_stalk_interaction()
+#             test.collect_stalk_sections()
+#             test.calc_stalk_stiffness()
+#             test.save_results(overwrite_result=True)
+
+#         # Compute all_relMargins_mean
+#         score = get_stats(rodney_config)
+#         print(f"Parameters: {params}, Score: {score}")
+#         return score
+
+#     # Define parameter bounds
+#     bounds = [
+#         (0.2, 0.6),  # min_force_rate
+#         (0.5, 2.0),  # lo_pos_accel_tol
+#         (0.4, 2.0),  # med_pos_accel_tol
+#         (0.4, 2.0),  # hi_pos_accel_tol
+#         (20, 50),    # lo_force_accel_tol
+#         (20, 50),    # med_force_accel_tol
+#         (20, 50)     # hi_force_accel_tol
+#     ]
+
+#     # Initial guess (midpoint of bounds)
+#     initial_guess = [(b[0] + b[1]) / 2 for b in bounds]
+
+#     # Run optimization
+#     result = minimize(objective, initial_guess, method='L-BFGS-B', bounds=bounds)
+
+#     best_params = result.x
+#     best_score = result.fun
+
+#     print(f"Best parameters for {rodney_config}: "
+#           f"min_force_rate={best_params[0]:.4f}, "
+#           f"lo_pos_accel_tol={best_params[1]:.4f}, "
+#           f"med_pos_accel_tol={best_params[2]:.4f}, "
+#           f"hi_pos_accel_tol={best_params[3]:.4f}, "
+#           f"lo_force_accel_tol={best_params[4]:.4f}, "
+#           f"med_force_accel_tol={best_params[5]:.4f}, "
+#           f"hi_force_accel_tol={best_params[6]:.4f}, "
+#           f"Best score: {best_score:.6f}")
+
+# Helper function to load optimized parameters
+def load_optimized_parameters(rodney_config):
+    param_file = 'Results/optimized_parameters.csv'
+    default_params = {
+        'min_force_rate': 0.3,
+        'lo_pos_accel_tol': 1.0,
+        'med_pos_accel_tol': 0.5,
+        'hi_pos_accel_tol': 0.5,
+        'lo_force_accel_tol': 25.0,
+        'med_force_accel_tol': 30.0,
+        'hi_force_accel_tol': 40.0
+    }
+    if os.path.isfile(param_file):
+        df = pd.read_csv(param_file)
+        if 'rodney_config' in df.columns and rodney_config in df['rodney_config'].values:
+            row = df[df['rodney_config'] == rodney_config].iloc[0]
+            return {
+                'min_force_rate': float(row['min_force_rate']),
+                'lo_pos_accel_tol': float(row['lo_pos_accel_tol']),
+                'med_pos_accel_tol': float(row['med_pos_accel_tol']),
+                'hi_pos_accel_tol': float(row['hi_pos_accel_tol']),
+                'lo_force_accel_tol': float(row['lo_force_accel_tol']),
+                'med_force_accel_tol': float(row['med_force_accel_tol']),
+                'hi_force_accel_tol': float(row['hi_force_accel_tol'])
+            }
+    return default_params
+
+# Modified process_data to use optimized parameters
+def process_data(date, test_num, view=False, overwrite=False):
+    # Load optimized filtering parameters for the configuration
+    config = get_config(date, test_num)
+    params = load_optimized_parameters(config)
+    
+    test = LabStalkRow(date=date, test_num=test_num,
+                       min_force_rate=params['min_force_rate'],
+                       lo_pos_accel_tol=params['lo_pos_accel_tol'],
+                       med_pos_accel_tol=params['med_pos_accel_tol'],
+                       hi_pos_accel_tol=params['hi_pos_accel_tol'],
+                       lo_force_accel_tol=params['lo_force_accel_tol'],
+                       med_force_accel_tol=params['med_force_accel_tol'],
+                       hi_force_accel_tol=params['hi_force_accel_tol'])
+    test.smooth_strains()
+    test.correct_linear_drift()
+    test.shift_initials()
+    test.calculate_force_position(smooth=True, small_den_cutoff=0.00006)
+    test.differentiate_force_position(smooth=True, window=100)
+    test.differentiate_force_position_DT(smooth=True, window=100)
+    test.find_stalk_interaction()
+    test.collect_stalk_sections()
+    test.calc_stalk_stiffness()
+
+    if view:
+        test.plot_force_position(view_flag=False)
+        # test.plot_raw_strain()
+        # test.plot_force_position_DT()
+        # test.plot_force_position_DDT()
+    else:
+        test.save_results(overwrite_result=True)
+    
+    if not local_run_flag:
+        plt.show()
+
+def optimize_parameters(dates, rodney_config):
+    all_tests = []
+    for date in dates:
+        test_nums = get_tests_for_config(date, rodney_config)
+        for test_num in test_nums:
+            all_tests.append((date, test_num))
+    print(f'Found {len(all_tests)} files for {rodney_config}')
+    
+    # Define objective function
+    def objective(params):
+        min_force_rate, lo_pos_accel_tol, med_pos_accel_tol, hi_pos_accel_tol, \
+        lo_force_accel_tol, med_force_accel_tol, hi_force_accel_tol = params
+        for date, test_num in all_tests:
+            test = LabStalkRow(date=date, test_num=test_num,
+                               min_force_rate=min_force_rate,
+                               lo_pos_accel_tol=lo_pos_accel_tol,
+                               med_pos_accel_tol=med_pos_accel_tol,
+                               hi_pos_accel_tol=hi_pos_accel_tol,
+                               lo_force_accel_tol=lo_force_accel_tol,
+                               med_force_accel_tol=med_force_accel_tol,
+                               hi_force_accel_tol=hi_force_accel_tol)
+            test.smooth_strains()
+            test.correct_linear_drift()
+            test.shift_initials()
+            test.calculate_force_position(smooth=True, small_den_cutoff=0.00006)
+            test.differentiate_force_position(smooth=True, window=100)
+            test.differentiate_force_position_DT(smooth=True, window=100)
+            test.find_stalk_interaction()
+            test.collect_stalk_sections()
+            test.calc_stalk_stiffness()
+            test.save_results(overwrite_result=True)
+        score = get_stats(rodney_config)
+        print(f"Parameters: {params}, Score: {score}")
+        return score
+
+    # Initial bounds (first round)
+    initial_bounds = [
+        (0.2, 0.6),  # min_force_rate
+        (0.5, 2.0),  # lo_pos_accel_tol
+        (0.4, 0.8),  # med_pos_accel_tol
+        (0.4, 0.8),  # hi_pos_accel_tol
+        (20, 50),    # lo_force_accel_tol
+        (25, 50),    # med_force_accel_tol
+        (35, 50)     # hi_force_accel_tol
+    ]
+
+    n_starts = 10
+    best_score = float('inf')
+    best_params = None
+
+    # Function to run optimization for one round
+    def run_optimization_round(bounds, round_num):
+        nonlocal best_score, best_params
+        print(f"Starting optimization round {round_num}")
+        for i in range(n_starts):
+            initial_guess = [np.random.uniform(b[0], b[1]) for b in bounds]
+            print(f"Round {round_num}, Start {i+1}/{n_starts}, Initial guess: {initial_guess}")
+            result = minimize(
+                objective,
+                initial_guess,
+                method='L-BFGS-B',
+                bounds=bounds,
+                options={'maxiter': 1000, 'maxfun': 1500, 'disp': False}
+            )
+            if result.fun < best_score:
+                best_score = result.fun
+                best_params = result.x
+        print(f"Round {round_num} best parameters: {best_params}, Score: {best_score}")
+
+    # Run first round
+    run_optimization_round(initial_bounds, 1)
+
+    # Second round: ±30% of first round's optimal values
+    second_bounds = []
+    for i, (lower, upper) in enumerate(initial_bounds):
+        opt_val = best_params[i]
+        delta = 0.3 * abs(opt_val)
+        new_lower = max(lower, opt_val - delta)
+        new_upper = min(upper, opt_val + delta)
+        second_bounds.append((new_lower, new_upper))
+    run_optimization_round(second_bounds, 2)
+
+    # Third round: ±10% of second round's optimal values
+    third_bounds = []
+    for i, (lower, upper) in enumerate(initial_bounds):
+        opt_val = best_params[i]
+        delta = 0.1 * abs(opt_val)
+        new_lower = max(lower, opt_val - delta)
+        new_upper = min(upper, opt_val + delta)
+        third_bounds.append((new_lower, new_upper))
+    run_optimization_round(third_bounds, 3)
+
+    # Save optimized parameters
+    param_file = 'Results/optimized_parameters.csv'
+    headers = ['rodney_config', 'min_force_rate', 'lo_pos_accel_tol', 'med_pos_accel_tol',
+               'hi_pos_accel_tol', 'lo_force_accel_tol', 'med_force_accel_tol',
+               'hi_force_accel_tol', 'best_score']
+    row = [rodney_config] + list(best_params) + [best_score]
+
+    file_exists = os.path.isfile(param_file)
+    if file_exists:
+        df = pd.read_csv(param_file)
+        if 'rodney_config' in df.columns and rodney_config in df['rodney_config'].values:
+            df.loc[df['rodney_config'] == rodney_config, headers] = row
+            df.to_csv(param_file, index=False)
+        else:
+            with open(param_file, 'a', newline='') as csvfile:
+                csvwriter = csv.writer(csvfile)
+                csvwriter.writerow(row)
+    else:
+        with open(param_file, 'w', newline='') as csvfile:
+            csvwriter = csv.writer(csvfile)
+            csvwriter.writerow(headers)
+            csvwriter.writerow(row)
+
+    print(f"Best parameters for {rodney_config}: "
+          f"min_force_rate={best_params[0]:.4f}, "
+          f"lo_pos_accel_tol={best_params[1]:.4f}, "
+          f"med_pos_accel_tol={best_params[2]:.4f}, "
+          f"hi_pos_accel_tol={best_params[3]:.4f}, "
+          f"lo_force_accel_tol={best_params[4]:.4f}, "
+          f"med_force_accel_tol={best_params[5]:.4f}, "
+          f"hi_force_accel_tol={best_params[6]:.4f}, "
+          f"Best score: {best_score:.6f}")
+
 if __name__ == "__main__":
     local_run_flag = True
     
     '''Batch run of same configuration'''
-    for i in range(101, 145+1):
-        process_data(date='07_10', test_num=f'{i}', view=False, overwrite=True)
+    # for i in range(11, 40+1):
+    #     process_data(date='07_03', test_num=f'{i}', view=True, overwrite=True)
 
-    boxplot_data(rodney_config='Integrated Beam Prototype 1', plot_num=100)
-    boxplot_data(rodney_config='Integrated Beam Prototype 2', plot_num=101)
-    boxplot_data(rodney_config='Integrated Beam Prototype 3', plot_num=103)
+    # boxplot_data(rodney_config='Integrated Beam Prototype 1', plot_num=101)
+    # boxplot_data(rodney_config='Integrated Beam Prototype 2', plot_num=102)
+    # boxplot_data(rodney_config='Integrated Beam Prototype 3', plot_num=103)
     '''end batch run'''
 
+    '''Statistics'''
+    # print('1', get_stats(rodney_config='Integrated Beam Prototype 1', plot_num=201))
+    # print('2', get_stats(rodney_config='Integrated Beam Prototype 2', plot_num=202))
+    # print('3', get_stats(rodney_config='Integrated Beam Prototype 3', plot_num=203))
+    '''end statistics'''
 
     '''Single file run and view full file. Does not save result'''
     # process_data(date='07_10', test_num='1', view=True)
     '''end single file run'''
+
+    # Optimize parameters for a specific configuration
+    # optimize_parameters(dates=['07_03', '07_10'], rodney_config='Integrated Beam Prototype 1')
 
     plt.show()
