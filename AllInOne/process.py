@@ -847,6 +847,6 @@ if __name__ == "__main__":
     '''end single file run'''
 
     # Optimize parameters for a specific configuration
-    # optimize_parameters(dates=['07_03', '07_10'], rodney_config='Integrated Beam Prototype 1')
+    optimize_parameters(dates=['07_03', '07_10'], rodney_config='Integrated Beam Prototype 3')
 
     plt.show()
