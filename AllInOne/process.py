@@ -13,7 +13,7 @@ class LabStalkRow:
         self.min_position = 6 * 1e-2    # centimeters
         self.max_position = 16 * 1e-2   # centimeters
         self.min_force = 2  # Newtons
-        self.min_force_rate = 0.5  # Newton/second
+        self.min_force_rate = 0.3  # Newton/second
         self.min_sequential = 20
         # Create results folder
         parent_folder = os.path.join('Results')
@@ -48,13 +48,16 @@ class LabStalkRow:
                     self.stalk_type = row[1]
                     if row[1] == "lo":
                         self.result_color = 'red'
-                        self.accel_tol = 1.0
+                        self.pos_accel_tol = 1.0
+                        self.force_accel_tol = 25.0
                     elif row[1] == "med":
                         self.result_color = 'green'
-                        self.accel_tol = 0.3
+                        self.pos_accel_tol = 0.5
+                        self.force_accel_tol = 30.0
                     elif row[1] == "hi":
                         self.result_color = 'blue'
-                        self.accel_tol = 0.3
+                        self.pos_accel_tol = 0.5
+                        self.force_accel_tol = 40.0
                     param_rows += 1
                 if row[0] == "sensor height (cm)":
                     self.height = float(row[1])*1e-2
@@ -154,7 +157,7 @@ class LabStalkRow:
             self.force = savgol_filter(self.force, window, order)
             self.position = savgol_filter(self.position, window, order)
 
-    def differentiate_force_position(self, smooth=True, window=100, order=2):
+    def differentiate_force_position(self, smooth=True, window=150, order=2):
         self.forceDT = np.gradient(self.force, self.time)
         self.positionDT = np.gradient(self.position, self.time)
 
@@ -162,7 +165,7 @@ class LabStalkRow:
             self.forceDT = savgol_filter(self.forceDT, window, order)
             self.positionDT = savgol_filter(self.positionDT, window, order)
 
-    def differentiate_force_position_DT(self, smooth=True, window=100, order=2):
+    def differentiate_force_position_DT(self, smooth=True, window=200, order=2):
         self.forceDDT = np.gradient(self.forceDT, self.time)
         self.positionDDT = np.gradient(self.positionDT, self.time)
 
@@ -171,12 +174,15 @@ class LabStalkRow:
             self.positionDDT = savgol_filter(self.positionDDT, window, order)
 
     def find_stalk_interaction(self):
-        self.near_zero_accel_indices = np.where(np.abs(self.positionDDT) < self.accel_tol)[0]
+        self.near_zero_accel_indices = np.where(np.abs(self.positionDDT) < self.pos_accel_tol)[0]
         self.valid_position_indices = np.where((self.position > self.min_position) & (self.position < self.max_position))[0]
         self.interaction_indices = np.intersect1d(self.near_zero_accel_indices, self.valid_position_indices)
         
         self.valid_force_indices = np.where((self.force > self.min_force) & (self.forceDT > self.min_force_rate))[0]
         self.interaction_indices = np.intersect1d(self.interaction_indices, self.valid_force_indices)
+
+        self.valid_force_accel_indices = np.where(np.abs(self.forceDDT) < self.force_accel_tol)[0]
+        self.interaction_indices = np.intersect1d(self.interaction_indices, self.valid_force_accel_indices)
         
         # Identify sequential groups and filter out blips (groups with fewer than min_sequential indices)
         if len(self.interaction_indices) > 0:
@@ -328,13 +334,14 @@ class LabStalkRow:
     def plot_force_position_DDT(self):
         fig, ax = plt.subplots(2, 1, sharex=True, figsize=(8, 3))
         ax[0].plot(self.time, self.forceDDT, label='Force Accel')
+        if hasattr(self, 'near_zero_accel_indices'):
+            ax[0].plot(self.time[self.interaction_indices], self.forceDDT[self.interaction_indices], 'ro', markersize=2, label='Near-zero accel')
         ax[0].set_ylabel('Force Accel (N/s2)')
         ax[1].plot(self.time, self.positionDDT*100, label='Position Accel')
         if hasattr(self, 'near_zero_accel_indices'):
             ax[1].plot(self.time[self.interaction_indices], self.positionDDT[self.interaction_indices]*100, 'ro', markersize=2, label='Near-zero accel')
         ax[1].set_xlabel('Time (s)')
         ax[1].set_ylabel('Position Accel (cm/s2)')
-        ax[1].legend()
         plt.tight_layout()
 
     def plot_raw_strain(self):
@@ -367,7 +374,7 @@ class LabStalkRow:
         # plt.xlabel('Stalk Number')
         plt.ylabel('Flexural Stiffness')
 
-    def save_results(self):
+    def save_results(self, overwrite_result=False):
         # Prepare row data
         row = [self.date, self.csv_path]
         for header_row in self.header_rows:
@@ -375,28 +382,32 @@ class LabStalkRow:
                 row.append(header_row[1] + ' : ' + header_row[2] + ' : ' + header_row[3])
             else:
                 row.append(header_row[1] if len(header_row) > 1 else '')
+        row += [self.pos_accel_tol, self.force_accel_tol]
         for stalk in self.flex_stiffs:
             row.append(stalk)
 
-        # Check if file exists and if csv_path is already in the second column
+        # Check if file exists
         file_exists = os.path.isfile(self.results_path)
-        write_row = True
+        headers = ['Date', 'File'] + [row[0] for row in self.header_rows if row[0] != "====="]
+        headers += ['positionDDT_tol', 'forceDDT_tol']
+        headers += ['Stalk1', 'Stalk2', 'Stalk3', 'Stalk4', 'Stalk5', 'Stalk6', 'Stalk7', 'Stalk8', 'Stalk9']
+
         if file_exists:
             df = pd.read_csv(self.results_path)
-            if 'File' in df.columns and self.csv_path in df['File'].values:
-                write_row = False
+            if 'File' in df.columns and self.csv_path in df['File'].values and overwrite_result:
+                # Overwrite existing row
+                df.loc[df['File'] == self.csv_path, headers] = row
+                df.to_csv(self.results_path, index=False)
+                return
 
-        # Write to CSV if row should be written
-        if write_row:
-            with open(self.results_path, 'a', newline='') as csvfile:
-                csvwriter = csv.writer(csvfile)
-                if not file_exists:
-                    headers = ['Date', 'File'] + [row[0] for row in self.header_rows if row[0] != "====="]
-                    headers += ['Stalk1', 'Stalk2', 'Stalk3', 'Stalk4', 'Stalk5', 'Stalk6', 'Stalk7', 'Stalk8', 'Stalk9']
-                    csvwriter.writerow(headers)
-                csvwriter.writerow(row)
+        # Write new row
+        with open(self.results_path, 'a', newline='') as csvfile:
+            csvwriter = csv.writer(csvfile)
+            if not file_exists:
+                csvwriter.writerow(headers)
+            csvwriter.writerow(row)
 
-def process_data(date, test_num, view=False):
+def process_data(date, test_num, view=False, overwrite=False):
     test = LabStalkRow(date=date, test_num=test_num)
     test.smooth_strains()
     test.correct_linear_drift()
@@ -409,18 +420,18 @@ def process_data(date, test_num, view=False):
     test.calc_stalk_stiffness()
 
     if view:
-        test.plot_force_position(view_flag=view)
-        test.plot_raw_strain()
+        test.plot_force_position(view_flag=False)
+        # test.plot_raw_strain()
         # test.plot_force_position_DT()
         # test.plot_force_position_DDT()
     else:
-        test.save_results()
+        test.save_results(overwrite_result=True)
     
     
     if not local_run_flag:
         plt.show()
 
-def boxplot_data(rodney_config):
+def boxplot_data(rodney_config, plot_num=20):
     results_df = pd.read_csv(r'Results\results.csv')
     config_results = results_df[results_df['rodney configuration'] == rodney_config]
     lo_results = config_results[config_results['stalk array (lo med hi)'] == 'lo']
@@ -431,7 +442,7 @@ def boxplot_data(rodney_config):
     med_EIs = med_results[['Stalk1', 'Stalk2', 'Stalk3', 'Stalk4', 'Stalk5', 'Stalk6', 'Stalk7', 'Stalk8', 'Stalk9']]
     hi_EIs = hi_results[['Stalk1', 'Stalk2', 'Stalk3', 'Stalk4', 'Stalk5', 'Stalk6', 'Stalk7', 'Stalk8', 'Stalk9']]
 
-    plt.figure(20)
+    plt.figure(plot_num)
     plt.title(rodney_config)
     for _, row in lo_EIs.iloc[2:].iterrows():
         plt.scatter(range(1, len(row) + 1), row, c='red', s=2)
@@ -457,10 +468,12 @@ if __name__ == "__main__":
     local_run_flag = True
     
     '''Batch run of same configuration'''
-    for i in range(11, 40+1):
-        process_data(date='07_03', test_num=f'{i}')
+    for i in range(101, 145+1):
+        process_data(date='07_10', test_num=f'{i}', view=False, overwrite=True)
 
-    boxplot_data(rodney_config='Integrated Beam Prototype 1')
+    boxplot_data(rodney_config='Integrated Beam Prototype 1', plot_num=100)
+    boxplot_data(rodney_config='Integrated Beam Prototype 2', plot_num=101)
+    boxplot_data(rodney_config='Integrated Beam Prototype 3', plot_num=103)
     '''end batch run'''
 
 

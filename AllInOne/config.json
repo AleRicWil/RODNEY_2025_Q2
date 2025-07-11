@@ -1,11 +1,11 @@
 {
-    "configuration": "Integrated Beam Prototype 1",
-    "pvc_stiffness": "med",
-    "height": 88.0,
-    "yaw": 20.0,
+    "configuration": "Integrated Beam Prototype 3",
+    "pvc_stiffness": "hi",
+    "height": 89.0,
+    "yaw": 15.0,
     "pitch": 0.0,
     "roll": 0.0,
     "rate_of_travel": 25.0,
     "angle_of_travel": 0.0,
-    "offset_distance": 12.0
+    "offset_distance": 9.0
 }
