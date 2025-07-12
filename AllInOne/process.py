@@ -636,7 +636,7 @@ def process_data(date, test_num, view=False, overwrite=False):
         if overwrite:
             test.save_results(overwrite_result=True)
         test.plot_force_position(view_flag=False)
-        test.plot_raw_strain()
+        # test.plot_raw_strain()
         # test.plot_force_position_DT()
         # test.plot_force_position_DDT()
     else:
@@ -775,7 +775,7 @@ if __name__ == "__main__":
     
     '''Batch run of same configuration'''
     # for i in range(1, 45+1):
-    #     process_data(date='07_11', test_num=f'{i}', view=False, overwrite=True)
+    #     process_data(date='07_11', test_num=f'{i}', view=True, overwrite=True)
 
     # boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_10', plot_num=105)
     # boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_11', plot_num=106)
