@@ -553,7 +553,7 @@ def get_stats(rodney_config, date=None, stalk_type=None, plot_num=None):
         plt.title('Error Margin Relative to Mean of Stalk Type')
         plt.legend()
 
-    return all_relMargins_median
+    return all_relMargins_mean, all_relMargins_median
 
 # Optimization functions
 def get_all_tests(date):
@@ -636,7 +636,7 @@ def process_data(date, test_num, view=False, overwrite=False):
         if overwrite:
             test.save_results(overwrite_result=True)
         test.plot_force_position(view_flag=False)
-        test.plot_raw_strain()
+        # test.plot_raw_strain()
         # test.plot_force_position_DT()
         # test.plot_force_position_DDT()
     else:
@@ -775,16 +775,16 @@ if __name__ == "__main__":
     
     '''Batch run of same configuration'''
     # for i in range(1, 45+1):
-    #     process_data(date='07_11', test_num=f'{i}', view=False, overwrite=True)
+    #     process_data(date='07_11', test_num=f'{i}', view=True, overwrite=True)
 
     # boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_10', plot_num=105)
     # boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_11', plot_num=106)
     '''end batch run'''
 
     '''Statistics'''
-    # print('3', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_10', plot_num=205))
-    # print('3', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_11', plot_num=206))
-    # print('3 All', get_stats(rodney_config='Integrated Beam Prototype 3', plot_num=204))
+    print('1', get_stats(rodney_config='Integrated Beam Prototype 1', plot_num=204))
+    print('2', get_stats(rodney_config='Integrated Beam Prototype 2', plot_num=205))
+    print('3', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_10', plot_num=206))
     '''end statistics'''
 
     '''Single file run and view full file. Does not save result'''
@@ -792,6 +792,6 @@ if __name__ == "__main__":
     '''end single file run'''
 
     # Optimize parameters for a specific configuration
-    optimize_parameters(dates=['07_03', '07_10'], rodney_config='Integrated Beam Prototype 1')
+    # optimize_parameters(dates=['07_03', '07_10'], rodney_config='Integrated Beam Prototype 3')
 
     plt.show()
