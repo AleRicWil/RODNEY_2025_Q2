@@ -20,7 +20,7 @@ class LabStalkRow:
         self.max_position = 16 * 1e-2   # centimeters
         self.min_force = 2  # Newtons
         self.min_force_rate = min_force_rate  # Newton/second
-        self.min_sequential = 20
+        self.min_sequential = 10
         # Create results folder
         parent_folder = os.path.join('Results')
         os.makedirs(parent_folder, exist_ok=True)
@@ -182,7 +182,9 @@ class LabStalkRow:
     def find_stalk_interaction(self):
         self.near_zero_accel_indices = np.where(np.abs(self.positionDDT) < self.pos_accel_tol)[0]
         self.valid_position_indices = np.where((self.position > self.min_position) & (self.position < self.max_position))[0]
+        self.valid_positionDT_indices = np.where(self.positionDT < 0.1)
         self.interaction_indices = np.intersect1d(self.near_zero_accel_indices, self.valid_position_indices)
+        # self.interaction_indices = np.intersect1d(self.interaction_indices, self.valid_positionDT_indices)
         
         self.valid_force_indices = np.where((self.force > self.min_force) & (self.forceDT > self.min_force_rate))[0]
         self.interaction_indices = np.intersect1d(self.interaction_indices, self.valid_force_indices)
@@ -454,8 +456,12 @@ class LabStalkRow:
                 csvwriter.writerow(headers)
             csvwriter.writerow(row)
 
-def boxplot_data(rodney_config, plot_num=20):
+def boxplot_data(rodney_config, date=None, stalk_type=None, plot_num=20):
     results_df = pd.read_csv(r'Results\results.csv')
+    if not date == None:
+        results_df = results_df[results_df['Date'] == date]
+    if not stalk_type == None:
+        results_df = results_df[results_df['stalk array (lo med hi)'] == stalk_type]
     config_results = results_df[results_df['rodney configuration'] == rodney_config]
     lo_results = config_results[config_results['stalk array (lo med hi)'] == 'lo']
     med_results = config_results[config_results['stalk array (lo med hi)'] == 'med']
@@ -485,9 +491,9 @@ def boxplot_data(rodney_config, plot_num=20):
                    whiskerprops=dict(color='black'),
                    capprops=dict(color='blue'),
                    medianprops=dict(color='black'))
-    plt.ylim(0, None)
+    plt.ylim(0, 50)
 
-def get_stats(rodney_config, plot_num=None):
+def get_stats(rodney_config, date=None, stalk_type=None, plot_num=None):
     def get_ci(data, type_mean, confidence=0.95):
         n = len(data)
         mean = np.mean(data)
@@ -498,6 +504,10 @@ def get_stats(rodney_config, plot_num=None):
         return {'interval': ci, 'mean': mean, 'margin': margin, 'rel_margin': rel_margin}
     
     results_df = pd.read_csv(r'Results\results.csv')
+    if not date == None:
+        results_df = results_df[results_df['Date'] == date]
+    if not stalk_type == None:
+        results_df = results_df[results_df['stalk array (lo med hi)'] == stalk_type]
     config_results = results_df[results_df['rodney configuration'] == rodney_config]
     lo_results = config_results[config_results['stalk array (lo med hi)'] == 'lo']
     med_results = config_results[config_results['stalk array (lo med hi)'] == 'med']
@@ -535,7 +545,7 @@ def get_stats(rodney_config, plot_num=None):
         plt.scatter(range(1, len(hi_relMargins)+1), hi_relMargins*100, label='hi', c='blue')
         plt.axhline(all_relMargins_mean*100, c='black')
         plt.axhline(medhi_relMargins_mean*100, c='brown')
-    
+        plt.ylim(0, 30)
         plt.ylabel('% Relative Error Margin')
         plt.title('Error Margin Relative to Mean of Stalk Type')
         plt.legend()
@@ -568,86 +578,17 @@ def get_tests_for_config(date, rodney_config):
             tests.append(test_num)
     return tests
 
-# def optimize_parameters(dates, rodney_config):
-#     all_tests = []
-#     for date in dates:
-#         test_nums = get_tests_for_config(date, rodney_config)
-#         for test_num in test_nums:
-#             all_tests.append((date, test_num))
-#     print(f'Found {len(all_tests)} files for {rodney_config}')
-    
-#     # Define objective function
-#     def objective(params):
-#         min_force_rate, lo_pos_accel_tol, med_pos_accel_tol, hi_pos_accel_tol, \
-#         lo_force_accel_tol, med_force_accel_tol, hi_force_accel_tol = params
-
-#         # Process all tests with these parameters
-#         for date, test_num in all_tests:
-#             test = LabStalkRow(date=date, test_num=test_num,
-#                                min_force_rate=min_force_rate,
-#                                lo_pos_accel_tol=lo_pos_accel_tol,
-#                                med_pos_accel_tol=med_pos_accel_tol,
-#                                hi_pos_accel_tol=hi_pos_accel_tol,
-#                                lo_force_accel_tol=lo_force_accel_tol,
-#                                med_force_accel_tol=med_force_accel_tol,
-#                                hi_force_accel_tol=hi_force_accel_tol)
-#             test.smooth_strains()
-#             test.correct_linear_drift()
-#             test.shift_initials()
-#             test.calculate_force_position(smooth=True, small_den_cutoff=0.00006)
-#             test.differentiate_force_position(smooth=True, window=100)
-#             test.differentiate_force_position_DT(smooth=True, window=100)
-#             test.find_stalk_interaction()
-#             test.collect_stalk_sections()
-#             test.calc_stalk_stiffness()
-#             test.save_results(overwrite_result=True)
-
-#         # Compute all_relMargins_mean
-#         score = get_stats(rodney_config)
-#         print(f"Parameters: {params}, Score: {score}")
-#         return score
-
-#     # Define parameter bounds
-#     bounds = [
-#         (0.2, 0.6),  # min_force_rate
-#         (0.5, 2.0),  # lo_pos_accel_tol
-#         (0.4, 2.0),  # med_pos_accel_tol
-#         (0.4, 2.0),  # hi_pos_accel_tol
-#         (20, 50),    # lo_force_accel_tol
-#         (20, 50),    # med_force_accel_tol
-#         (20, 50)     # hi_force_accel_tol
-#     ]
-
-#     # Initial guess (midpoint of bounds)
-#     initial_guess = [(b[0] + b[1]) / 2 for b in bounds]
-
-#     # Run optimization
-#     result = minimize(objective, initial_guess, method='L-BFGS-B', bounds=bounds)
-
-#     best_params = result.x
-#     best_score = result.fun
-
-#     print(f"Best parameters for {rodney_config}: "
-#           f"min_force_rate={best_params[0]:.4f}, "
-#           f"lo_pos_accel_tol={best_params[1]:.4f}, "
-#           f"med_pos_accel_tol={best_params[2]:.4f}, "
-#           f"hi_pos_accel_tol={best_params[3]:.4f}, "
-#           f"lo_force_accel_tol={best_params[4]:.4f}, "
-#           f"med_force_accel_tol={best_params[5]:.4f}, "
-#           f"hi_force_accel_tol={best_params[6]:.4f}, "
-#           f"Best score: {best_score:.6f}")
-
 # Helper function to load optimized parameters
 def load_optimized_parameters(rodney_config):
     param_file = 'Results/optimized_parameters.csv'
     default_params = {
-        'min_force_rate': 0.3,
+        'min_force_rate': 0.1,
         'lo_pos_accel_tol': 1.0,
         'med_pos_accel_tol': 0.5,
-        'hi_pos_accel_tol': 0.5,
+        'hi_pos_accel_tol': 4.0,
         'lo_force_accel_tol': 25.0,
         'med_force_accel_tol': 30.0,
-        'hi_force_accel_tol': 40.0
+        'hi_force_accel_tol': 150.0
     }
     if os.path.isfile(param_file):
         df = pd.read_csv(param_file)
@@ -678,19 +619,21 @@ def process_data(date, test_num, view=False, overwrite=False):
                        lo_force_accel_tol=params['lo_force_accel_tol'],
                        med_force_accel_tol=params['med_force_accel_tol'],
                        hi_force_accel_tol=params['hi_force_accel_tol'])
-    test.smooth_strains()
+    test.smooth_strains(window=50)
     test.correct_linear_drift()
     test.shift_initials()
     test.calculate_force_position(smooth=True, small_den_cutoff=0.00006)
-    test.differentiate_force_position(smooth=True, window=100)
-    test.differentiate_force_position_DT(smooth=True, window=100)
+    test.differentiate_force_position(smooth=True, window=50)
+    test.differentiate_force_position_DT(smooth=True, window=50)
     test.find_stalk_interaction()
     test.collect_stalk_sections()
     test.calc_stalk_stiffness()
 
     if view:
+        if overwrite:
+            test.save_results(overwrite_result=True)
         test.plot_force_position(view_flag=False)
-        # test.plot_raw_strain()
+        test.plot_raw_strain()
         # test.plot_force_position_DT()
         # test.plot_force_position_DDT()
     else:
@@ -828,18 +771,20 @@ if __name__ == "__main__":
     local_run_flag = True
     
     '''Batch run of same configuration'''
-    # for i in range(11, 40+1):
-    #     process_data(date='07_03', test_num=f'{i}', view=True, overwrite=True)
+    for i in range(1, 15+1):
+        process_data(date='07_11', test_num=f'{i}', view=True, overwrite=True)
 
     # boxplot_data(rodney_config='Integrated Beam Prototype 1', plot_num=101)
     # boxplot_data(rodney_config='Integrated Beam Prototype 2', plot_num=102)
-    # boxplot_data(rodney_config='Integrated Beam Prototype 3', plot_num=103)
+    boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_10', stalk_type='hi', plot_num=103)
+    boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_11', stalk_type='hi', plot_num=104)
     '''end batch run'''
 
     '''Statistics'''
     # print('1', get_stats(rodney_config='Integrated Beam Prototype 1', plot_num=201))
     # print('2', get_stats(rodney_config='Integrated Beam Prototype 2', plot_num=202))
-    # print('3', get_stats(rodney_config='Integrated Beam Prototype 3', plot_num=203))
+    print('3', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_10', stalk_type='hi', plot_num=203))
+    print('3', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_11', stalk_type='hi', plot_num=204))
     '''end statistics'''
 
     '''Single file run and view full file. Does not save result'''
@@ -847,6 +792,6 @@ if __name__ == "__main__":
     '''end single file run'''
 
     # Optimize parameters for a specific configuration
-    optimize_parameters(dates=['07_03', '07_10'], rodney_config='Integrated Beam Prototype 3')
+    # optimize_parameters(dates=['07_03', '07_10', '07_11'], rodney_config='Integrated Beam Prototype 3 Fast')
 
     plt.show()

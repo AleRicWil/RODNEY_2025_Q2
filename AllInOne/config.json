@@ -1,6 +1,6 @@
 {
     "configuration": "Integrated Beam Prototype 3",
-    "pvc_stiffness": "hi",
+    "pvc_stiffness": "lo",
     "height": 89.0,
     "yaw": 15.0,
     "pitch": 0.0,
