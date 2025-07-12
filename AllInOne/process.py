@@ -498,8 +498,9 @@ def get_stats(rodney_config, date=None, stalk_type=None, plot_num=None):
         n = len(data)
         mean = np.mean(data)
         sem = stats.sem(data)
-        ci = stats.t.interval(confidence, df=n-1, loc=mean, scale=sem)
-        margin = stats.t.ppf((1 + confidence) / 2, df=n-1) * sem
+        std = np.std(data, ddof=1)
+        ci = stats.t.interval(confidence, df=n-1, loc=mean, scale=std)
+        margin = stats.t.ppf((1 + confidence) / 2, df=n-1) * std
         rel_margin = margin / type_mean if type_mean != 0 else 0  # Relative margin
         return {'interval': ci, 'mean': mean, 'margin': margin, 'rel_margin': rel_margin}
     
@@ -534,6 +535,8 @@ def get_stats(rodney_config, date=None, stalk_type=None, plot_num=None):
 
     all_relMargins = np.append(np.append(lo_relMargins, med_relMargins), hi_relMargins)
     all_relMargins_mean = np.nanmean(all_relMargins)
+    all_relMargins_median = np.nanmedian(all_relMargins)
+
     medhi_relMargins = np.append(med_relMargins, hi_relMargins)
     medhi_relMargins_mean = np.nanmean(medhi_relMargins)
 
@@ -545,12 +548,12 @@ def get_stats(rodney_config, date=None, stalk_type=None, plot_num=None):
         plt.scatter(range(1, len(hi_relMargins)+1), hi_relMargins*100, label='hi', c='blue')
         plt.axhline(all_relMargins_mean*100, c='black')
         plt.axhline(medhi_relMargins_mean*100, c='brown')
-        plt.ylim(0, 30)
+        plt.ylim(0, 80)
         plt.ylabel('% Relative Error Margin')
         plt.title('Error Margin Relative to Mean of Stalk Type')
         plt.legend()
 
-    return all_relMargins_mean
+    return all_relMargins_median
 
 # Optimization functions
 def get_all_tests(date):
@@ -771,20 +774,17 @@ if __name__ == "__main__":
     local_run_flag = True
     
     '''Batch run of same configuration'''
-    for i in range(1, 15+1):
-        process_data(date='07_11', test_num=f'{i}', view=True, overwrite=True)
+    # for i in range(1, 45+1):
+    #     process_data(date='07_11', test_num=f'{i}', view=False, overwrite=True)
 
-    # boxplot_data(rodney_config='Integrated Beam Prototype 1', plot_num=101)
-    # boxplot_data(rodney_config='Integrated Beam Prototype 2', plot_num=102)
-    boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_10', stalk_type='hi', plot_num=103)
-    boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_11', stalk_type='hi', plot_num=104)
+    # boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_10', plot_num=105)
+    # boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_11', plot_num=106)
     '''end batch run'''
 
     '''Statistics'''
-    # print('1', get_stats(rodney_config='Integrated Beam Prototype 1', plot_num=201))
-    # print('2', get_stats(rodney_config='Integrated Beam Prototype 2', plot_num=202))
-    print('3', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_10', stalk_type='hi', plot_num=203))
-    print('3', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_11', stalk_type='hi', plot_num=204))
+    # print('3', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_10', plot_num=205))
+    # print('3', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_11', plot_num=206))
+    # print('3 All', get_stats(rodney_config='Integrated Beam Prototype 3', plot_num=204))
     '''end statistics'''
 
     '''Single file run and view full file. Does not save result'''
@@ -792,6 +792,6 @@ if __name__ == "__main__":
     '''end single file run'''
 
     # Optimize parameters for a specific configuration
-    # optimize_parameters(dates=['07_03', '07_10', '07_11'], rodney_config='Integrated Beam Prototype 3 Fast')
+    optimize_parameters(dates=['07_03', '07_10'], rodney_config='Integrated Beam Prototype 1')
 
     plt.show()
