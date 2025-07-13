@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import scipy.stats as stats
 import csv
 import os
+from skopt import gp_minimize
+from skopt.space import Real
 from scipy.signal import savgol_filter
 from itertools import product
 from scipy.optimize import minimize
@@ -12,7 +14,7 @@ local_run_flag = False
 results = []
 
 class LabStalkRow:
-    def __init__(self, date, test_num, min_force_rate=0.3,
+    def __init__(self, date, test_num, min_force_rate=0.01,
                  lo_pos_accel_tol=1.0, med_pos_accel_tol=0.5, hi_pos_accel_tol=0.5,
                  lo_force_accel_tol=25.0, med_force_accel_tol=30.0, hi_force_accel_tol=40.0):
         
@@ -180,51 +182,45 @@ class LabStalkRow:
             self.positionDDT = savgol_filter(self.positionDDT, window, order)
 
     def find_stalk_interaction(self):
-        self.near_zero_accel_indices = np.where(np.abs(self.positionDDT) < self.pos_accel_tol)[0]
-        self.valid_position_indices = np.where((self.position > self.min_position) & (self.position < self.max_position))[0]
-        self.valid_positionDT_indices = np.where(self.positionDT < 0.1)
-        self.interaction_indices = np.intersect1d(self.near_zero_accel_indices, self.valid_position_indices)
-        # self.interaction_indices = np.intersect1d(self.interaction_indices, self.valid_positionDT_indices)
+        # Combine conditions into a single boolean mask
+        mask = (np.abs(self.positionDDT) < self.pos_accel_tol) & \
+            (self.position > self.min_position) & \
+            (self.position < self.max_position) & \
+            (self.positionDT < 0.1) & \
+            (self.force > self.min_force) & \
+            (self.forceDT > self.min_force_rate) & \
+            (np.abs(self.forceDDT) < self.force_accel_tol)
         
-        self.valid_force_indices = np.where((self.force > self.min_force) & (self.forceDT > self.min_force_rate))[0]
-        self.interaction_indices = np.intersect1d(self.interaction_indices, self.valid_force_indices)
-
-        self.valid_force_accel_indices = np.where(np.abs(self.forceDDT) < self.force_accel_tol)[0]
-        self.interaction_indices = np.intersect1d(self.interaction_indices, self.valid_force_accel_indices)
+        # Get initial interaction indices
+        interaction_indices = np.where(mask)[0]
         
-        # Identify sequential groups and filter out blips (groups with fewer than min_sequential indices)
-        if len(self.interaction_indices) > 0:
-            diffs = np.diff(self.interaction_indices)
+        # Filter out blips (groups with fewer than min_sequential indices)
+        if len(interaction_indices) > 0:
+            diffs = np.diff(interaction_indices)
             group_starts = np.where(diffs > 1)[0] + 1
-            group_indices = np.split(self.interaction_indices, group_starts)
-            self.non_blip_indices = np.concatenate([group for group in group_indices if len(group) >= self.min_sequential])
-        else:
-            self.non_blip_indices = np.array([])
+            groups = np.split(interaction_indices, group_starts)
+            interaction_indices = np.concatenate([g for g in groups if len(g) >= self.min_sequential]) if groups else np.array([])
         
-        self.interaction_indices = np.intersect1d(self.interaction_indices, self.non_blip_indices)
+        # Reconnect gaps < 30% of average gap
+        if len(interaction_indices) > 1:
+            gaps = np.diff(interaction_indices)
+            valid_gaps = gaps[gaps > 1]
+            if len(valid_gaps) > 0:
+                threshold = 0.3 * np.mean(valid_gaps)
+                new_indices = []
+                for i in range(len(interaction_indices) - 1):
+                    new_indices.append(interaction_indices[i])
+                    gap = interaction_indices[i + 1] - interaction_indices[i]
+                    if gap > 1 and gap < threshold:
+                        new_indices.extend(range(interaction_indices[i] + 1, interaction_indices[i + 1]))
+                new_indices.append(interaction_indices[-1])
+                interaction_indices = np.array(new_indices, dtype=np.int64)
         
-        # Determine gaps and reconnect sections with gaps < 30% of average gap
-        gaps = np.diff(self.interaction_indices)
-        gaps = gaps[gaps>1]
-        avg_gap = np.mean(gaps)
-        threshold = 0.3*avg_gap
-
-        new_indices = []
-        gap_index = 0
-        for i in range(len(self.interaction_indices)-1):
-            new_indices.append(self.interaction_indices[i])
-            if self.interaction_indices[i+1] - self.interaction_indices[i] > 1:
-                if gaps[gap_index] < threshold:
-                    gap_start = self.interaction_indices[i] + 1
-                    gap_end = gap_start + gaps[gap_index]
-                    for new_index in range(gap_start, gap_end):
-                        new_indices.append(new_index)
-                gap_index += 1
-
-        self.interaction_indices = np.array(new_indices)
-        self.stalk_force = self.force[self.interaction_indices]
-        self.stalk_position = self.position[self.interaction_indices]
-        self.stalk_time = self.time[self.interaction_indices]
+        # Assign results
+        self.interaction_indices = interaction_indices
+        self.stalk_force = self.force[interaction_indices]
+        self.stalk_position = self.position[interaction_indices]
+        self.stalk_time = self.time[interaction_indices]
 
     def collect_stalk_sections(self):
         gaps = np.concatenate(([0], np.diff(self.interaction_indices)))
@@ -456,6 +452,31 @@ class LabStalkRow:
                 csvwriter.writerow(headers)
             csvwriter.writerow(row)
 
+    def clear_intermediate_data(self):
+        self.strain_a1 = None
+        self.strain_b1 = None
+        self.strain_a2 = None
+        self.strain_b2 = None
+        self.strain_a1_raw = None
+        self.strain_b1_raw = None
+        self.strain_a2_raw = None
+        self.strain_b2_raw = None
+        self.force = None
+        self.position = None
+        self.forceDT = None
+        self.positionDT = None
+        self.forceDDT = None
+        self.positionDDT = None
+        self.interaction_indices = None
+        self.stalk_force = None
+        self.stalk_position = None
+        self.stalk_time = None
+        self.stalk_forces = None
+        self.stalk_positions = None
+        self.stalk_times = None
+        self.force_fits = None
+        self.position_fits = None
+
 def boxplot_data(rodney_config, date=None, stalk_type=None, plot_num=20):
     results_df = pd.read_csv(r'Results\results.csv')
     if not date == None:
@@ -539,6 +560,7 @@ def get_stats(rodney_config, date=None, stalk_type=None, plot_num=None):
 
     medhi_relMargins = np.append(med_relMargins, hi_relMargins)
     medhi_relMargins_mean = np.nanmean(medhi_relMargins)
+    medhi_relMargins_median = np.nanmedian(medhi_relMargins)
 
 
     if plot_num is not None:
@@ -546,8 +568,8 @@ def get_stats(rodney_config, date=None, stalk_type=None, plot_num=None):
         plt.scatter(range(1, len(lo_relMargins)+1), lo_relMargins*100, label='lo', c='red')
         plt.scatter(range(1, len(med_relMargins)+1), med_relMargins*100, label='med', c='green')
         plt.scatter(range(1, len(hi_relMargins)+1), hi_relMargins*100, label='hi', c='blue')
-        plt.axhline(all_relMargins_mean*100, c='black')
-        plt.axhline(medhi_relMargins_mean*100, c='brown')
+        plt.axhline(all_relMargins_median*100, c='black')
+        plt.axhline(medhi_relMargins_median*100, c='brown')
         plt.ylim(0, 80)
         plt.ylabel('% Relative Error Margin')
         plt.title('Error Margin Relative to Mean of Stalk Type')
@@ -585,7 +607,6 @@ def get_tests_for_config(date, rodney_config):
 def load_optimized_parameters(rodney_config):
     param_file = 'Results/optimized_parameters.csv'
     default_params = {
-        'min_force_rate': 0.1,
         'lo_pos_accel_tol': 1.0,
         'med_pos_accel_tol': 0.5,
         'hi_pos_accel_tol': 4.0,
@@ -598,7 +619,6 @@ def load_optimized_parameters(rodney_config):
         if 'rodney_config' in df.columns and rodney_config in df['rodney_config'].values:
             row = df[df['rodney_config'] == rodney_config].iloc[0]
             return {
-                'min_force_rate': float(row['min_force_rate']),
                 'lo_pos_accel_tol': float(row['lo_pos_accel_tol']),
                 'med_pos_accel_tol': float(row['med_pos_accel_tol']),
                 'hi_pos_accel_tol': float(row['hi_pos_accel_tol']),
@@ -615,7 +635,6 @@ def process_data(date, test_num, view=False, overwrite=False):
     params = load_optimized_parameters(config)
     
     test = LabStalkRow(date=date, test_num=test_num,
-                       min_force_rate=params['min_force_rate'],
                        lo_pos_accel_tol=params['lo_pos_accel_tol'],
                        med_pos_accel_tol=params['med_pos_accel_tol'],
                        hi_pos_accel_tol=params['hi_pos_accel_tol'],
@@ -646,6 +665,44 @@ def process_data(date, test_num, view=False, overwrite=False):
         plt.show()
 
 def optimize_parameters(dates, rodney_config):
+    import gc
+    import os
+    from psutil import Process, HIGH_PRIORITY_CLASS
+    from os import getpid
+
+    inst = Process(getpid())
+    inst.nice(HIGH_PRIORITY_CLASS)
+
+
+    # Precompute data for all tests
+    class PrecomputedTest:
+        def __init__(self, date, test_num):
+            test = LabStalkRow(date=date, test_num=test_num)
+            test.smooth_strains(window=100)
+            test.correct_linear_drift()
+            test.shift_initials()
+            test.calculate_force_position(smooth=True, small_den_cutoff=0.00006)
+            test.differentiate_force_position(smooth=True, window=10)
+            test.differentiate_force_position_DT(smooth=True, window=100)
+            self.time = test.time
+            self.force = test.force
+            self.position = test.position
+            self.forceDT = test.forceDT
+            self.positionDT = test.positionDT
+            self.forceDDT = test.forceDDT
+            self.positionDDT = test.positionDDT
+            self.stalk_type = test.stalk_type
+            self.min_position = test.min_position
+            self.max_position = test.max_position
+            self.min_force = test.min_force
+            self.min_force_rate = test.min_force_rate
+            self.min_sequential = test.min_sequential
+            self.height = test.height
+            self.yaw = test.yaw
+            self.results_path = test.results_path
+            self.csv_path = test.csv_path
+            self.header_rows = test.header_rows
+    
     all_tests = []
     for date in dates:
         test_nums = get_tests_for_config(date, rodney_config)
@@ -653,97 +710,107 @@ def optimize_parameters(dates, rodney_config):
             all_tests.append((date, test_num))
     print(f'Found {len(all_tests)} files for {rodney_config}')
     
-    # Define objective function
+    precomputed_tests = [PrecomputedTest(date, test_num) for date, test_num in all_tests]
+    
+    # Define the search space
+    search_space = [
+        Real(0.5, 3.5, name='lo_pos_accel_tol'),
+        Real(0.5, 3.5, name='med_pos_accel_tol'),
+        Real(1.0, 5.0, name='hi_pos_accel_tol'),
+        Real(30, 70, name='lo_force_accel_tol'),
+        Real(40, 100, name='med_force_accel_tol'),
+        Real(40, 100, name='hi_force_accel_tol')
+    ]
+    
+    # Objective function using precomputed data
+    call = [0]
+    scores = []
+    best = [10]
+    count = [0]
     def objective(params):
-        min_force_rate, lo_pos_accel_tol, med_pos_accel_tol, hi_pos_accel_tol, \
+        call[0] += 1
+        global results
+        results.clear()
+        lo_pos_accel_tol, med_pos_accel_tol, hi_pos_accel_tol, \
         lo_force_accel_tol, med_force_accel_tol, hi_force_accel_tol = params
-        for date, test_num in all_tests:
-            test = LabStalkRow(date=date, test_num=test_num,
-                               min_force_rate=min_force_rate,
-                               lo_pos_accel_tol=lo_pos_accel_tol,
-                               med_pos_accel_tol=med_pos_accel_tol,
-                               hi_pos_accel_tol=hi_pos_accel_tol,
-                               lo_force_accel_tol=lo_force_accel_tol,
-                               med_force_accel_tol=med_force_accel_tol,
-                               hi_force_accel_tol=hi_force_accel_tol)
-            test.smooth_strains()
-            test.correct_linear_drift()
-            test.shift_initials()
-            test.calculate_force_position(smooth=True, small_den_cutoff=0.00006)
-            test.differentiate_force_position(smooth=True, window=100)
-            test.differentiate_force_position_DT(smooth=True, window=100)
+        
+        for precomp in precomputed_tests:
+            # Extract date and test_num using os.path
+            base_name = os.path.basename(precomp.csv_path)
+            date = base_name.split('_test_')[0]
+            test_num = base_name.split('_test_')[1].split('.csv')[0]
+            
+            test = LabStalkRow(date=date, test_num=test_num)
+            test.time = precomp.time
+            test.force = precomp.force
+            test.position = precomp.position
+            test.forceDT = precomp.forceDT
+            test.positionDT = precomp.positionDT
+            test.forceDDT = precomp.forceDDT
+            test.positionDDT = precomp.positionDDT
+            test.stalk_type = precomp.stalk_type
+            test.min_position = precomp.min_position
+            test.max_position = precomp.max_position
+            test.min_force = precomp.min_force
+            test.min_force_rate = precomp.min_force_rate
+            test.min_sequential = precomp.min_sequential
+            test.height = precomp.height
+            test.yaw = precomp.yaw
+            test.results_path = precomp.results_path
+            test.csv_path = precomp.csv_path
+            test.header_rows = precomp.header_rows
+            
+            if test.stalk_type == 'lo':
+                test.pos_accel_tol = lo_pos_accel_tol
+                test.force_accel_tol = lo_force_accel_tol
+            elif test.stalk_type == 'med':
+                test.pos_accel_tol = med_pos_accel_tol
+                test.force_accel_tol = med_force_accel_tol
+            elif test.stalk_type == 'hi':
+                test.pos_accel_tol = hi_pos_accel_tol
+                test.force_accel_tol = hi_force_accel_tol
+            
             test.find_stalk_interaction()
             test.collect_stalk_sections()
             test.calc_stalk_stiffness()
             test.save_results(overwrite_result=True)
-        score = get_stats(rodney_config)
-        print(f"Parameters: {params}, Score: {score}")
+            # test.clear_intermediate_data()
+            del test
+            gc.collect()
+        
+        score = get_stats(rodney_config)[0]
+        scores.append(score)
+        if call[0] > 120:
+            count[0] += 1
+        if score < best[0]:
+            print('hello')
+            best[0] = score
+            count[0] = 0
+        print(f"Parameters: {[f'{p:.3f}' for p in params]}, Score: {score:.6f}, Best: {best[0]:.6f}")
         return score
-
-    # Initial bounds (first round)
-    initial_bounds = [
-        (0.2, 0.6),  # min_force_rate
-        (0.5, 2.0),  # lo_pos_accel_tol
-        (0.4, 0.8),  # med_pos_accel_tol
-        (0.4, 0.8),  # hi_pos_accel_tol
-        (20, 50),    # lo_force_accel_tol
-        (25, 50),    # med_force_accel_tol
-        (35, 50)     # hi_force_accel_tol
-    ]
-
-    n_starts = 10
-    best_score = float('inf')
-    best_params = None
-
-    # Function to run optimization for one round
-    def run_optimization_round(bounds, round_num):
-        nonlocal best_score, best_params
-        print(f"Starting optimization round {round_num}")
-        for i in range(n_starts):
-            initial_guess = [np.random.uniform(b[0], b[1]) for b in bounds]
-            print(f"Round {round_num}, Start {i+1}/{n_starts}, Initial guess: {initial_guess}")
-            result = minimize(
-                objective,
-                initial_guess,
-                method='L-BFGS-B',
-                bounds=bounds,
-                options={'maxiter': 1000, 'maxfun': 1500, 'disp': False}
-            )
-            if result.fun < best_score:
-                best_score = result.fun
-                best_params = result.x
-        print(f"Round {round_num} best parameters: {best_params}, Score: {best_score}")
-
-    # Run first round
-    run_optimization_round(initial_bounds, 1)
-
-    # Second round: ±30% of first round's optimal values
-    second_bounds = []
-    for i, (lower, upper) in enumerate(initial_bounds):
-        opt_val = best_params[i]
-        delta = 0.3 * abs(opt_val)
-        new_lower = max(lower, opt_val - delta)
-        new_upper = min(upper, opt_val + delta)
-        second_bounds.append((new_lower, new_upper))
-    run_optimization_round(second_bounds, 2)
-
-    # Third round: ±10% of second round's optimal values
-    third_bounds = []
-    for i, (lower, upper) in enumerate(initial_bounds):
-        opt_val = best_params[i]
-        delta = 0.1 * abs(opt_val)
-        new_lower = max(lower, opt_val - delta)
-        new_upper = min(upper, opt_val + delta)
-        third_bounds.append((new_lower, new_upper))
-    run_optimization_round(third_bounds, 3)
-
-    # Save optimized parameters
+    
+    # Early stopping callback
+    def early_stopping(res):
+        if len(scores) >= 30:
+            print(call[0], count[0])
+            if count[0] > 30 and call[0] >= 120:
+                print("Early stopping: Score improvement too low")
+                return True
+        return False
+    
+    # Perform Bayesian optimization
+    print("Starting Bayesian optimization")
+    result = gp_minimize(objective, search_space, n_initial_points=30, n_calls=200, callback=[early_stopping])
+    
+    # Extract and save best parameters
+    best_params = result.x
+    best_score = result.fun
     param_file = 'Results/optimized_parameters.csv'
-    headers = ['rodney_config', 'min_force_rate', 'lo_pos_accel_tol', 'med_pos_accel_tol',
+    headers = ['rodney_config', 'lo_pos_accel_tol', 'med_pos_accel_tol',
                'hi_pos_accel_tol', 'lo_force_accel_tol', 'med_force_accel_tol',
                'hi_force_accel_tol', 'best_score']
-    row = [rodney_config] + list(best_params) + [best_score]
-
+    row = [rodney_config] + best_params + [best_score]
+    
     file_exists = os.path.isfile(param_file)
     if file_exists:
         df = pd.read_csv(param_file)
@@ -759,32 +826,33 @@ def optimize_parameters(dates, rodney_config):
             csvwriter = csv.writer(csvfile)
             csvwriter.writerow(headers)
             csvwriter.writerow(row)
-
+    
     print(f"Best parameters for {rodney_config}: "
-          f"min_force_rate={best_params[0]:.4f}, "
-          f"lo_pos_accel_tol={best_params[1]:.4f}, "
-          f"med_pos_accel_tol={best_params[2]:.4f}, "
-          f"hi_pos_accel_tol={best_params[3]:.4f}, "
-          f"lo_force_accel_tol={best_params[4]:.4f}, "
-          f"med_force_accel_tol={best_params[5]:.4f}, "
-          f"hi_force_accel_tol={best_params[6]:.4f}, "
+          f"lo_pos_accel_tol={best_params[0]:.4f}, "
+          f"med_pos_accel_tol={best_params[1]:.4f}, "
+          f"hi_pos_accel_tol={best_params[2]:.4f}, "
+          f"lo_force_accel_tol={best_params[3]:.4f}, "
+          f"med_force_accel_tol={best_params[4]:.4f}, "
+          f"hi_force_accel_tol={best_params[5]:.4f}, "
           f"Best score: {best_score:.6f}")
 
 if __name__ == "__main__":
     local_run_flag = True
     
     '''Batch run of same configuration'''
-    # for i in range(1, 45+1):
-    #     process_data(date='07_11', test_num=f'{i}', view=True, overwrite=True)
+    for i in range(1, 45+1):
+        process_data(date='07_11', test_num=f'{i}', view=True, overwrite=True)
 
-    # boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_10', plot_num=105)
-    # boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_11', plot_num=106)
+    boxplot_data(rodney_config='Integrated Beam Prototype 1', date='07_03', plot_num=104)
+    boxplot_data(rodney_config='Integrated Beam Prototype 2', date='07_10', plot_num=105)
+    boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_10', plot_num=106)
     '''end batch run'''
 
     '''Statistics'''
-    print('1', get_stats(rodney_config='Integrated Beam Prototype 1', plot_num=204))
-    print('2', get_stats(rodney_config='Integrated Beam Prototype 2', plot_num=205))
-    print('3', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_10', plot_num=206))
+    print('1 mean, median', get_stats(rodney_config='Integrated Beam Prototype 1', plot_num=204))
+    print('2 mean, median', get_stats(rodney_config='Integrated Beam Prototype 2', plot_num=205))
+    print('3 mean, median', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_10', plot_num=206))
+    print('3 mean, median', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_11', plot_num=207))
     '''end statistics'''
 
     '''Single file run and view full file. Does not save result'''
@@ -792,6 +860,6 @@ if __name__ == "__main__":
     '''end single file run'''
 
     # Optimize parameters for a specific configuration
-    # optimize_parameters(dates=['07_03', '07_10'], rodney_config='Integrated Beam Prototype 1')
+    # optimize_parameters(dates=['07_03', '07_10'], rodney_config='Integrated Beam Prototype 3')
 
     plt.show()
