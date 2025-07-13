@@ -7,8 +7,6 @@ import os
 from skopt import gp_minimize
 from skopt.space import Real
 from scipy.signal import savgol_filter
-from itertools import product
-from scipy.optimize import minimize
 
 local_run_flag = False
 results = []
@@ -494,6 +492,7 @@ def boxplot_data(rodney_config, date=None, stalk_type=None, plot_num=20):
 
     plt.figure(plot_num)
     plt.title(rodney_config)
+    plt.ylabel('Flexural Stiffness (N/m^2)')
     for _, row in lo_EIs.iloc[2:].iterrows():
         plt.scatter(range(1, len(row) + 1), row, c='red', s=2)
     lo_EIs.boxplot(grid=False, patch_artist=True, boxprops=dict(facecolor='none', color='red'),
@@ -561,18 +560,18 @@ def get_stats(rodney_config, date=None, stalk_type=None, plot_num=None):
     medhi_relMargins = np.append(med_relMargins, hi_relMargins)
     medhi_relMargins_mean = np.nanmean(medhi_relMargins)
     medhi_relMargins_median = np.nanmedian(medhi_relMargins)
-
+    print(all_relMargins_median)
 
     if plot_num is not None:
         plt.figure(plot_num)
         plt.scatter(range(1, len(lo_relMargins)+1), lo_relMargins*100, label='lo', c='red')
         plt.scatter(range(1, len(med_relMargins)+1), med_relMargins*100, label='med', c='green')
         plt.scatter(range(1, len(hi_relMargins)+1), hi_relMargins*100, label='hi', c='blue')
-        plt.axhline(all_relMargins_median*100, c='black')
-        plt.axhline(medhi_relMargins_median*100, c='brown')
+        plt.axhline(all_relMargins_median*100, c='black', label='Median')
+        # plt.axhline(medhi_relMargins_median*100, c='brown')
         plt.ylim(0, 80)
         plt.ylabel('% Relative Error Margin')
-        plt.title('Error Margin Relative to Mean of Stalk Type')
+        plt.title(rodney_config + f', Median: {all_relMargins_median*100:.1f}')
         plt.legend()
 
     return all_relMargins_mean, all_relMargins_median
@@ -665,6 +664,18 @@ def process_data(date, test_num, view=False, overwrite=False):
         plt.show()
 
 def optimize_parameters(dates, rodney_config):
+    '''This optimizes the filtering paramters to provide the lowest average relative margin of error for all stalk types
+    of a specified configuration. However, the median value is reported in other places. This is because using the 
+    median as the objective score allows the optimizer to give bad results for troublesome data and effectively ignore
+    it. In the worst case, it can choose values that result in non-detections of bad stalk interactions, whose results
+    are recorded as np.nan and do not affect later statistics used to provide the objective score.
+    
+    There are 6 parameters to optimize. The optimizer samples the field with 30 combinations, and then selectively targets
+    areas to find the optimal combination. This exploration takes a while, and notable imporovements don't happen until a 
+    while into the process. This function will report the best value after each objective call, and after 120 combinations, 
+    it will start counting how many calls were made without improvement, stopping after 30 calls with no improvement. So, 
+    this will run at least 150 combinations, up to 200'''
+    
     import gc
     import os
     from psutil import Process, HIGH_PRIORITY_CLASS
@@ -840,17 +851,18 @@ if __name__ == "__main__":
     local_run_flag = True
     
     '''Batch run of same configuration'''
-    for i in range(1, 45+1):
-        process_data(date='07_11', test_num=f'{i}', view=True, overwrite=True)
+    # for i in range(1, 45+1):
+    #     process_data(date='07_10', test_num=f'{i}', view=True, overwrite=True)
 
-    boxplot_data(rodney_config='Integrated Beam Prototype 1', date='07_03', plot_num=104)
-    boxplot_data(rodney_config='Integrated Beam Prototype 2', date='07_10', plot_num=105)
+    # boxplot_data(rodney_config='Integrated Beam Prototype 1', date='07_03', plot_num=104)
+    # boxplot_data(rodney_config='Integrated Beam Prototype 2', date='07_10', plot_num=105)
     boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_10', plot_num=106)
+    boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_11', plot_num=107)
     '''end batch run'''
 
     '''Statistics'''
-    print('1 mean, median', get_stats(rodney_config='Integrated Beam Prototype 1', plot_num=204))
-    print('2 mean, median', get_stats(rodney_config='Integrated Beam Prototype 2', plot_num=205))
+    # print('1 mean, median', get_stats(rodney_config='Integrated Beam Prototype 1', plot_num=204))
+    # print('2 mean, median', get_stats(rodney_config='Integrated Beam Prototype 2', plot_num=205))
     print('3 mean, median', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_10', plot_num=206))
     print('3 mean, median', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_11', plot_num=207))
     '''end statistics'''
