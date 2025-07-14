@@ -3,6 +3,6 @@ Software related to BYU Crop Biomechanics Lab RODNEY device, a measurement syste
 ---Python packages needed in your environment---
 Run the following terminal command: 
 
-pip install numpy, scipy, matplotlib, pandas, pyserial, scikit-learn, keyboard, pyqtgraph, pyqt5
+pip install numpy, scipy, matplotlib, pandas, pyserial, scikit-learn, keyboard, pyqtgraph, pyqt5, psutil, scikit-optimize
 
 In 'Setup Verification' folder, run 'setup_test.py' to verify packages are installed. 

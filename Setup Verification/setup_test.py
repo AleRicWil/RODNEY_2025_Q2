@@ -11,5 +11,6 @@ from sklearn.linear_model import LinearRegression   # pip install scikit-learn
 from sklearn.preprocessing import PolynomialFeatures
 import pyqtgraph as pg
 from PyQt5 import QtWidgets, QtCore
-
+import psutil
+import skopt # pip install scikit-optimize
 
