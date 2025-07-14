@@ -840,23 +840,25 @@ if __name__ == "__main__":
     local_run_flag = True
     
     '''Batch run of same configuration'''
-    for i in range(1, 45+1):
-        process_data(date='07_11', test_num=f'{i}', view=True, overwrite=True)
+    # for i in range(1, 45+1):
+    #     process_data(date='07_14', test_num=f'{i}', view=True, overwrite=True)
 
-    boxplot_data(rodney_config='Integrated Beam Prototype 1', date='07_03', plot_num=104)
+    # boxplot_data(rodney_config='Integrated Beam Prototype 1', date='07_03', plot_num=104)
     boxplot_data(rodney_config='Integrated Beam Prototype 2', date='07_10', plot_num=105)
-    boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_10', plot_num=106)
+    boxplot_data(rodney_config='Integrated Beam Prototype 2', date='07_14', plot_num=106)
+    # boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_10', plot_num=106)
     '''end batch run'''
 
     '''Statistics'''
-    print('1 mean, median', get_stats(rodney_config='Integrated Beam Prototype 1', plot_num=204))
-    print('2 mean, median', get_stats(rodney_config='Integrated Beam Prototype 2', plot_num=205))
-    print('3 mean, median', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_10', plot_num=206))
-    print('3 mean, median', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_11', plot_num=207))
+    # print('1 mean, median', get_stats(rodney_config='Integrated Beam Prototype 1', plot_num=204))
+    print('2 mean, median', get_stats(rodney_config='Integrated Beam Prototype 2', date='07_10', plot_num=205))
+    print('2 mean, median', get_stats(rodney_config='Integrated Beam Prototype 2', date='07_14', plot_num=206))
+    # print('3 mean, median', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_10', plot_num=206))
+    # print('3 mean, median', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_11', plot_num=207))
     '''end statistics'''
 
     '''Single file run and view full file. Does not save result'''
-    # process_data(date='07_10', test_num='1', view=True)
+    # process_data(date='07_14', test_num='1', view=True)
     '''end single file run'''
 
     # Optimize parameters for a specific configuration
