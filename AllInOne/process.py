@@ -851,8 +851,8 @@ if __name__ == "__main__":
     local_run_flag = True
     
     '''Batch run of same configuration'''
-    for i in range(101, 145+1):
-        process_data(date='07_16', test_num=f'{i}', view=True, overwrite=True)
+    # for i in range(101, 145+1):
+    #     process_data(date='07_16', test_num=f'{i}', view=True, overwrite=True)
 
     # boxplot_data(rodney_config='Integrated Beam Prototype 1', date='07_03', plot_num=104)
     # boxplot_data(rodney_config='Integrated Beam Prototype 2', date='07_10', plot_num=105)
