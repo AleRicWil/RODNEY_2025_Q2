@@ -1,6 +1,6 @@
 {
     "configuration": "Integrated Beam Printed Guide 1",
-    "pvc_stiffness": "hi",
+    "pvc_stiffness": "lo",
     "height": 88.5,
     "yaw": 20.0,
     "pitch": 0.0,
