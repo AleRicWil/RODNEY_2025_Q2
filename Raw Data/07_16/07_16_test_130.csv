@@ -1,7 +1,7 @@
 user_note,,,,,
 rodney configuration,Integrated Beam Printed Guide 1,,,,
 sensor calibration (k d c),-0.046833 -0.046833 -0.046016 -0.046016,0.009751 0.009751 0.048646 0.048646,0.451608 0.451608 0.359203 0.359203,,
-stalk array (lo med hi),lo,,,,
+stalk array (lo med hi),med,,,,
 sensor height (cm),88.5,,,,
 sensor yaw (degrees),20.0,,,,
 sensor pitch (degrees),0.0,,,,
