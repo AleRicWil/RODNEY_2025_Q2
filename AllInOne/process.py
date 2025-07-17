@@ -517,7 +517,7 @@ def get_stats(rodney_config, date=None, stalk_type=None, plot_num=None):
     def get_ci(data, type_mean, confidence=0.95):
         n = len(data)
         mean = np.mean(data)
-        sem = stats.sem(data)
+        # sem = stats.sem(data)
         std = np.std(data, ddof=1)
         ci = stats.t.interval(confidence, df=n-1, loc=mean, scale=std)
         margin = stats.t.ppf((1 + confidence) / 2, df=n-1) * std
@@ -560,7 +560,7 @@ def get_stats(rodney_config, date=None, stalk_type=None, plot_num=None):
     medhi_relMargins = np.append(med_relMargins, hi_relMargins)
     medhi_relMargins_mean = np.nanmean(medhi_relMargins)
     medhi_relMargins_median = np.nanmedian(medhi_relMargins)
-    print(all_relMargins_median)
+    # print(all_relMargins_median)
 
     if plot_num is not None:
         plt.figure(plot_num)
@@ -794,7 +794,7 @@ def optimize_parameters(dates, rodney_config):
         if call[0] > 120:
             count[0] += 1
         if score < best[0]:
-            print('hello')
+            # print('hello')
             best[0] = score
             count[0] = 0
         print(f"Parameters: {[f'{p:.3f}' for p in params]}, Score: {score:.6f}, Best: {best[0]:.6f}")
@@ -804,14 +804,14 @@ def optimize_parameters(dates, rodney_config):
     def early_stopping(res):
         if len(scores) >= 30:
             print(call[0], count[0])
-            if count[0] > 30 and call[0] >= 120:
+            if count[0] > 100 and call[0] >= 120:
                 print("Early stopping: Score improvement too low")
                 return True
         return False
     
     # Perform Bayesian optimization
     print("Starting Bayesian optimization")
-    result = gp_minimize(objective, search_space, n_initial_points=30, n_calls=200, callback=[early_stopping])
+    result = gp_minimize(objective, search_space, n_initial_points=30, n_calls=300, callback=[early_stopping])
     
     # Extract and save best parameters
     best_params = result.x
@@ -852,20 +852,22 @@ if __name__ == "__main__":
     
     '''Batch run of same configuration'''
     # for i in range(1, 45+1):
-    #     process_data(date='07_14', test_num=f'{i}', view=True, overwrite=True)
+    #     process_data(date='07_16', test_num=f'{i}', view=True, overwrite=True)
 
     # boxplot_data(rodney_config='Integrated Beam Prototype 1', date='07_03', plot_num=104)
-    boxplot_data(rodney_config='Integrated Beam Prototype 2', date='07_10', plot_num=105)
-    boxplot_data(rodney_config='Integrated Beam Prototype 2', date='07_14', plot_num=106)
-    # boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_10', plot_num=106)
+    # boxplot_data(rodney_config='Integrated Beam Prototype 2', date='07_10', plot_num=105)
+    # boxplot_data(rodney_config='Integrated Beam Prototype 2', date='07_14', plot_num=106)
+    # boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_10', plot_num=107)
+    boxplot_data(rodney_config='Integrated Beam Printed Guide 1', date='07_16', plot_num=108)
     '''end batch run'''
 
     '''Statistics'''
     # print('1 mean, median', get_stats(rodney_config='Integrated Beam Prototype 1', plot_num=204))
-    print('2 mean, median', get_stats(rodney_config='Integrated Beam Prototype 2', date='07_10', plot_num=205))
-    print('2 mean, median', get_stats(rodney_config='Integrated Beam Prototype 2', date='07_14', plot_num=206))
-    # print('3 mean, median', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_10', plot_num=206))
-    # print('3 mean, median', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_11', plot_num=207))
+    # print('2 mean, median', get_stats(rodney_config='Integrated Beam Prototype 2', date='07_10', plot_num=205))
+    # print('2 mean, median', get_stats(rodney_config='Integrated Beam Prototype 2', date='07_14', plot_num=206))
+    # print('3 mean, median', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_10', plot_num=207))
+    # print('3 mean, median', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_11', plot_num=208))
+    print('mean, median', get_stats(rodney_config='Integrated Beam Printed Guide 1', date='07_16', plot_num=208))
     '''end statistics'''
 
     '''Single file run and view full file. Does not save result'''
@@ -873,6 +875,6 @@ if __name__ == "__main__":
     '''end single file run'''
 
     # Optimize parameters for a specific configuration
-    # optimize_parameters(dates=['07_03', '07_10'], rodney_config='Integrated Beam Prototype 3')
+    # optimize_parameters(dates=['07_16'], rodney_config='Integrated Beam Printed Guide 1')
 
     plt.show()
