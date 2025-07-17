@@ -568,7 +568,7 @@ def get_stats(rodney_config, date=None, stalk_type=None, plot_num=None):
         plt.scatter(range(1, len(med_relMargins)+1), med_relMargins*100, label='med', c='green')
         plt.scatter(range(1, len(hi_relMargins)+1), hi_relMargins*100, label='hi', c='blue')
         plt.axhline(all_relMargins_median*100, c='black', label='Median')
-        # plt.axhline(medhi_relMargins_median*100, c='brown')
+        plt.axhline(medhi_relMargins_median*100, c='brown', label='M/H Median')
         plt.ylim(0, 80)
         plt.ylabel('% Relative Error Margin')
         plt.title(rodney_config + f', Median: {all_relMargins_median*100:.1f}')
