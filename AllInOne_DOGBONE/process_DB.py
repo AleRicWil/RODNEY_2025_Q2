@@ -22,14 +22,14 @@ class LabStalkRow:
         self.min_force_rate = min_force_rate  # Newton/second
         self.min_sequential = 10
         # Create results folder
-        parent_folder = os.path.join('Results')
+        parent_folder = os.path.join('Results_DOGBONE')
         os.makedirs(parent_folder, exist_ok=True)
-        self.results_path = os.path.join(parent_folder, f'results.csv')
+        self.results_path = os.path.join(parent_folder, f'results_DB.csv')
         self.date = date
         self.test_num = test_num
 
         # Load strain data and calibration coefficients from CSV header
-        self.csv_path = rf'Raw Data\{date}\{date}_test_{test_num}.csv'
+        self.csv_path = rf'Raw Data_DOGBONE\{date}\{date}_test_{test_num}.csv'
         with open(self.csv_path, 'r') as f:
             reader = csv.reader(f)
             self.header_rows = []
@@ -81,16 +81,16 @@ class LabStalkRow:
             data = pd.read_csv(f)
 
         self.time = data['Time'].to_numpy()
-        self.strain_a1 = self.strain_a1_raw = data['Strain A1'].to_numpy()
-        self.strain_b1 = self.strain_b1_raw = data['Strain B1'].to_numpy()
-        self.strain_a2 = self.strain_a2_raw = data['Strain A2'].to_numpy()
-        self.strain_b2 = self.strain_b2_raw = data['Strain B2'].to_numpy()
+        self.strain_1 = self.strain_1_raw = data['Strain 1'].to_numpy()
+        self.strain_ = self.strain_11_raw = data['Strain 11'].to_numpy()
+        self.strain_2 = self.strain_2_raw = data['Strain 2'].to_numpy()
+        self.strain_3 = self.strain_3_raw = data['Strain 3'].to_numpy()
 
     def smooth_strains(self, window=100, order=2):
-        self.strain_a1 = savgol_filter(self.strain_a1, window, order)
-        self.strain_b1 = savgol_filter(self.strain_b1, window, order)
-        self.strain_a2 = savgol_filter(self.strain_a2, window, order)
-        self.strain_b2 = savgol_filter(self.strain_b2, window, order)
+        self.strain_1 = savgol_filter(self.strain_1, window, order)
+        self.strain_ = savgol_filter(self.strain_, window, order)
+        self.strain_2 = savgol_filter(self.strain_2, window, order)
+        self.strain_3 = savgol_filter(self.strain_3, window, order)
 
     def smooth_strain_DTs(self, window=100, order=2):
         self.strainDT_a1 = savgol_filter(self.strainDT_a1, window, order)
@@ -99,24 +99,24 @@ class LabStalkRow:
         self.strainDT_b2 = savgol_filter(self.strainDT_b2, window, order)
 
     def differentiate_strains(self):
-        self.strainDT_a1 = np.gradient(self.strain_a1, self.time)
-        self.strainDT_b1 = np.gradient(self.strain_b1, self.time)
-        self.strainDT_a2 = np.gradient(self.strain_a2, self.time)
-        self.strainDT_b2 = np.gradient(self.strain_b2, self.time)
+        self.strainDT_a1 = np.gradient(self.strain_1, self.time)
+        self.strainDT_b1 = np.gradient(self.strain_, self.time)
+        self.strainDT_a2 = np.gradient(self.strain_2, self.time)
+        self.strainDT_b2 = np.gradient(self.strain_3, self.time)
 
     def correct_linear_drift(self, zero_cutoff=500):
         t_start = self.time[0]
         t_end = self.time[-1]
 
-        self.strain_a1_ini = np.mean(self.strain_a1[0:zero_cutoff])
-        self.strain_b1_ini = np.mean(self.strain_b1[0:zero_cutoff])
-        self.strain_a2_ini = np.mean(self.strain_a2[0:zero_cutoff])
-        self.strain_b2_ini = np.mean(self.strain_b2[0:zero_cutoff])
+        self.strain_a1_ini = np.mean(self.strain_1[0:zero_cutoff])
+        self.strain_b1_ini = np.mean(self.strain_[0:zero_cutoff])
+        self.strain_a2_ini = np.mean(self.strain_2[0:zero_cutoff])
+        self.strain_b2_ini = np.mean(self.strain_3[0:zero_cutoff])
 
-        strain_a1_end = np.mean(self.strain_a1[-zero_cutoff:])
-        strain_b1_end = np.mean(self.strain_b1[-zero_cutoff:])
-        strain_a2_end = np.mean(self.strain_a2[-zero_cutoff:])
-        strain_b2_end = np.mean(self.strain_b2[-zero_cutoff:])
+        strain_a1_end = np.mean(self.strain_1[-zero_cutoff:])
+        strain_b1_end = np.mean(self.strain_[-zero_cutoff:])
+        strain_a2_end = np.mean(self.strain_2[-zero_cutoff:])
+        strain_b2_end = np.mean(self.strain_3[-zero_cutoff:])
 
         a1_drift_slope = (strain_a1_end - self.strain_a1_ini) / (t_end - t_start)
         b1_drift_slope = (strain_b1_end - self.strain_b1_ini) / (t_end - t_start)
@@ -128,23 +128,23 @@ class LabStalkRow:
         self.a2_drift = a2_drift_slope * self.time + self.strain_a2_ini
         self.b2_drift = b2_drift_slope * self.time + self.strain_b2_ini
 
-        corrected_a1 = self.strain_a1 - (self.a1_drift - self.strain_a1_ini)
-        corrected_b1 = self.strain_b1 - (self.b1_drift - self.strain_b1_ini)
-        corrected_a2 = self.strain_a2 - (self.a2_drift - self.strain_a2_ini)
-        corrected_b2 = self.strain_b2 - (self.b2_drift - self.strain_b2_ini)
+        corrected_a1 = self.strain_1 - (self.a1_drift - self.strain_a1_ini)
+        corrected_b1 = self.strain_ - (self.b1_drift - self.strain_b1_ini)
+        corrected_a2 = self.strain_2 - (self.a2_drift - self.strain_a2_ini)
+        corrected_b2 = self.strain_3 - (self.b2_drift - self.strain_b2_ini)
 
-        self.strain_a1 = corrected_a1
-        self.strain_b1 = corrected_b1
-        self.strain_a2 = corrected_a2
-        self.strain_b2 = corrected_b2
+        self.strain_1 = corrected_a1
+        self.strain_ = corrected_b1
+        self.strain_2 = corrected_a2
+        self.strain_3 = corrected_b2
 
     def shift_initials(self, initial_force=0, initial_position=0, zero_cutoff=500):
         '''Adjusts the calibration coefficients so the initial force from
         calculate_force_position() equals initial_force'''
-        self.strain_a1_ini = np.mean(self.strain_a1[0:zero_cutoff])
-        self.strain_b1_ini = np.mean(self.strain_b1[0:zero_cutoff])
-        self.strain_a2_ini = np.mean(self.strain_a2[0:zero_cutoff])
-        self.strain_b2_ini = np.mean(self.strain_b2[0:zero_cutoff])
+        self.strain_a1_ini = np.mean(self.strain_1[0:zero_cutoff])
+        self.strain_b1_ini = np.mean(self.strain_[0:zero_cutoff])
+        self.strain_a2_ini = np.mean(self.strain_2[0:zero_cutoff])
+        self.strain_b2_ini = np.mean(self.strain_3[0:zero_cutoff])
 
         self.c_A1 = self.strain_a1_ini
         self.c_B1 = self.strain_b1_ini
@@ -152,12 +152,12 @@ class LabStalkRow:
         self.c_B2 = self.strain_b2_ini
 
     def calculate_force_position(self, smooth=True, window=100, order=2, small_den_cutoff=0.000035):
-        self.force_num = self.k_A2 * (self.strain_a1 - self.c_A1) - self.k_A1 * (self.strain_a2 - self.c_A2)
+        self.force_num = self.k_A2 * (self.strain_1 - self.c_A1) - self.k_A1 * (self.strain_2 - self.c_A2)
         self.force_den = self.k_A1 * self.k_A2 * (self.d_A2 - self.d_A1)
         self.force = self.force_num / self.force_den
         
-        self.pos_num = self.k_A2 * self.d_A2 * (self.strain_a1 - self.c_A1) - self.k_A1 * self.d_A1 * (self.strain_a2 - self.c_A2)
-        self.pos_den = self.k_A2 * (self.strain_a1 - self.c_A1) - self.k_A1 * (self.strain_a2 - self.c_A2)
+        self.pos_num = self.k_A2 * self.d_A2 * (self.strain_1 - self.c_A1) - self.k_A1 * self.d_A1 * (self.strain_2 - self.c_A2)
+        self.pos_den = self.k_A2 * (self.strain_1 - self.c_A1) - self.k_A1 * (self.strain_2 - self.c_A2)
         self.position = np.where(np.abs(self.pos_den) < small_den_cutoff, 0, self.pos_num / self.pos_den)
         
         if smooth:
@@ -350,24 +350,24 @@ class LabStalkRow:
 
     def plot_raw_strain(self):
         fig, axs = plt.subplots(2, 2, sharex=True, sharey=True, figsize=(8, 6))
-        axs[0, 0].plot(self.time, self.strain_a1_raw, linewidth=0.3)
+        axs[0, 0].plot(self.time, self.strain_1_raw, linewidth=0.3)
         axs[0, 0].plot(self.time, self.a1_drift, linewidth=0.3)
-        axs[0, 0].plot(self.time, self.strain_a1, label='A1')
+        axs[0, 0].plot(self.time, self.strain_1, label='A1')
         axs[0, 0].axhline(self.strain_a1_ini, c='red', linewidth=0.5)
         axs[0, 0].legend()
-        axs[0, 1].plot(self.time, self.strain_a2_raw, linewidth=0.3)
+        axs[0, 1].plot(self.time, self.strain_2_raw, linewidth=0.3)
         axs[0, 1].plot(self.time, self.a2_drift, linewidth=0.3)
-        axs[0, 1].plot(self.time, self.strain_a2, label='A2')
+        axs[0, 1].plot(self.time, self.strain_2, label='A2')
         axs[0, 1].axhline(self.strain_a2_ini, c='red', linewidth=0.5)
         axs[0, 1].legend()
-        axs[1, 0].plot(self.time, self.strain_b1_raw, linewidth=0.3)
+        axs[1, 0].plot(self.time, self.strain_11_raw, linewidth=0.3)
         axs[1, 0].plot(self.time, self.b1_drift, linewidth=0.3)
-        axs[1, 0].plot(self.time, self.strain_b1, label='B1')
+        axs[1, 0].plot(self.time, self.strain_, label='B1')
         axs[1, 0].axhline(self.strain_b1_ini, c='red', linewidth=0.5)
         axs[1, 0].legend()
-        axs[1, 1].plot(self.time, self.strain_b2_raw, linewidth=0.3)
+        axs[1, 1].plot(self.time, self.strain_3_raw, linewidth=0.3)
         axs[1, 1].plot(self.time, self.b2_drift, linewidth=0.3)
-        axs[1, 1].plot(self.time, self.strain_b2, label='B2')
+        axs[1, 1].plot(self.time, self.strain_3, label='B2')
         axs[1, 1].axhline(self.strain_b2_ini, c='red', linewidth=0.5)
         axs[1, 1].legend()
         plt.tight_layout()
@@ -453,14 +453,14 @@ class LabStalkRow:
             csvwriter.writerow(row)
 
     def clear_intermediate_data(self):
-        self.strain_a1 = None
-        self.strain_b1 = None
-        self.strain_a2 = None
-        self.strain_b2 = None
-        self.strain_a1_raw = None
-        self.strain_b1_raw = None
-        self.strain_a2_raw = None
-        self.strain_b2_raw = None
+        self.strain_1 = None
+        self.strain_ = None
+        self.strain_2 = None
+        self.strain_3 = None
+        self.strain_1_raw = None
+        self.strain_11_raw = None
+        self.strain_2_raw = None
+        self.strain_3_raw = None
         self.force = None
         self.position = None
         self.forceDT = None
@@ -874,13 +874,12 @@ if __name__ == "__main__":
     '''Batch run of same configuration'''
     # for i in range(101, 145+1):
     #     process_data(date='07_16', test_num=f'{i}', view=True, overwrite=True)
-    # show_force_position(dates=['07_22'], test_nums=range(1, 13+1))
+    show_force_position(dates=['07_22'], test_nums=range(100, 100+1))
 
     # boxplot_data(rodney_config='Integrated Beam Prototype 1', date='07_03', plot_num=104)
     # boxplot_data(rodney_config='Integrated Beam Prototype 2', date='07_10', plot_num=105)
     # boxplot_data(rodney_config='Integrated Beam Prototype 2', date='07_14', plot_num=106)
-    boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_10', plot_num=107)
-    boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_11', plot_num=108)
+    # boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_10', plot_num=107)
     # boxplot_data(rodney_config='Integrated Beam Printed Guide 1', date='07_16', plot_num=108)
     '''end batch run'''
 
