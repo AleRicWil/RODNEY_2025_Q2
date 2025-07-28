@@ -866,7 +866,8 @@ def show_force_position(dates, test_nums, stalk_id=None, rodney_config=None):
             test.shift_initials()
             test.calculate_force_position(smooth=True, small_den_cutoff=0.00006)
             test.plot_force_position(view_stalks=False, plain=True)
-
+            test.plot_raw_strain()
+    plt.show()
 
 if __name__ == "__main__":
     local_run_flag = True
@@ -874,13 +875,13 @@ if __name__ == "__main__":
     '''Batch run of same configuration'''
     # for i in range(101, 145+1):
     #     process_data(date='07_16', test_num=f'{i}', view=True, overwrite=True)
-    # show_force_position(dates=['07_22'], test_nums=range(1, 13+1))
+    show_force_position(dates=['07_22'], test_nums=range(1, 13+1))
 
     # boxplot_data(rodney_config='Integrated Beam Prototype 1', date='07_03', plot_num=104)
     # boxplot_data(rodney_config='Integrated Beam Prototype 2', date='07_10', plot_num=105)
     # boxplot_data(rodney_config='Integrated Beam Prototype 2', date='07_14', plot_num=106)
-    boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_10', plot_num=107)
-    boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_11', plot_num=108)
+    # boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_10', plot_num=107)
+    # boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_11', plot_num=108)
     # boxplot_data(rodney_config='Integrated Beam Printed Guide 1', date='07_16', plot_num=108)
     '''end batch run'''
 

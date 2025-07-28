@@ -151,6 +151,80 @@ def run_calibration(port, config, status_queue):
 
     status_queue.put("Calibration ended")
 
+def generate_summary(date):
+    """Generate a summary CSV from all calibration data files for a given date.
+
+    Args:
+        date (str): Date string for the folder containing calibration data.
+    """
+    parent_folder = os.path.join('Raw Data_DOGBONE', f'{date}')
+    summary_path = os.path.join(parent_folder, f'{date}_calibration_summary.csv')
+    summary_data = []
+
+    if not os.path.exists(parent_folder):
+        return
+
+    for file_name in os.listdir(parent_folder):
+        if file_name.endswith('.csv') and 'calibration_mass' in file_name:
+            print('trying a file')
+            file_path = os.path.join(parent_folder, file_name)
+            # try:
+            #     mass = int(file_name.split('_mass_')[1].split('_pos_')[0])
+            #     position = int(file_name.split('_pos_')[1].split('.csv')[0])
+            # except (IndexError, ValueError):
+            #     print('file failed')
+            #     continue
+
+            strains = {'1': [], '11': [], '2': [], '3': []}
+            with open(file_path, 'r') as csvfile:
+                print('opened a file')
+                csvreader = csv.reader(csvfile)
+                header = True
+                for row in csvreader:
+                    if row[0] == 'mass (g)':
+                        mass = row[1]
+                    if row[0] == 'position (cm)':
+                        position = row[1]
+                    if header and row and row[0] == 'Time':
+                        header = False
+                        continue
+                    if not header and len(row) >= 5:
+                        try:
+                            strain_1 = float(row[1])
+                            strain_11 = float(row[2])
+                            strain_2 = float(row[3])
+                            strain_3 = float(row[4])
+                            strains['1'].append(strain_1)
+                            strains['11'].append(strain_11)
+                            strains['2'].append(strain_2)
+                            strains['3'].append(strain_3)
+                        except (ValueError, IndexError):
+                            continue
+
+            avg_strains = {
+                '1': np.mean(strains['1']) if strains['1'] else 0,
+                '11': np.mean(strains['11']) if strains['11'] else 0,
+                '2': np.mean(strains['2']) if strains['2'] else 0,
+                '3': np.mean(strains['3']) if strains['3'] else 0
+            }
+            stddev_strains = {
+                '1': np.std(strains['1']) if strains['1'] else 0,
+                '11': np.std(strains['11']) if strains['11'] else 0,
+                '2': np.std(strains['2']) if strains['2'] else 0,
+                '3': np.std(strains['3']) if strains['3'] else 0
+            }
+            summary_data.append([mass, position, avg_strains['1'], avg_strains['11'], avg_strains['2'], avg_strains['3'],
+                                 stddev_strains['1'], stddev_strains['11'], stddev_strains['2'], stddev_strains['3']])
+
+    with open(summary_path, 'w', newline='') as csvfile:
+        csvwriter = csv.writer(csvfile)
+        csvwriter.writerow(["=================================================================="])
+        csvwriter.writerow(['Mass (g)', 'Position (cm)', 'Avg Strain 1', 'Avg Strain 11', 'Avg Strain 2', 'Avg Strain 3',
+                            'Std Strain 1', 'Std Strain 11', 'Std Strain 2', 'Std Strain 3'])
+        for row in summary_data:
+            print(row)
+            csvwriter.writerow(row)
+
 def calculate_coefficients(calibration_data, cal_status_var):
     """Calculate calibration coefficients using multiple linear regression to directly fit k, d, and c.
 
@@ -266,4 +340,5 @@ def calculate_coefficients(calibration_data, cal_status_var):
         cal_status_var.set(f"Status: Error calculating coefficients: {str(e)}")
         return ""
     
-    
+if __name__ == '__main__':
+    generate_summary(date='01_01')

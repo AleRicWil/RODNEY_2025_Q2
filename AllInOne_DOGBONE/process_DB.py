@@ -323,6 +323,7 @@ class LabStalkRow:
             ax[1].axhline(15, c='red', linewidth=0.5)
             ax[1].axhline(10, c='red', linewidth=0.5)
 
+
     def plot_force_position_DT(self):
         fig, ax = plt.subplots(2, 1, sharex=True, figsize=(8, 3))
         ax[0].plot(self.time, self.forceDT, label='Force Rate')
@@ -588,7 +589,7 @@ def get_all_tests(date):
     return test_nums
 
 def get_config(date, test_num):
-    csv_path = f'Raw Data/{date}/{date}_test_{test_num}.csv'
+    csv_path = f'Raw Data_DOGBONE/{date}/{date}_test_{test_num}.csv'
     with open(csv_path, 'r') as f:
         reader = csv.reader(f)
         for row in reader:
@@ -864,8 +865,9 @@ def show_force_position(dates, test_nums, stalk_id=None, rodney_config=None):
             test.smooth_strains(window=100)
             test.correct_linear_drift()
             test.shift_initials()
-            test.calculate_force_position(smooth=True, small_den_cutoff=0.00006)
+            test.calculate_force_position(smooth=True, small_den_cutoff=0.000006)
             test.plot_force_position(view_stalks=False, plain=True)
+    plt.show()
 
 
 if __name__ == "__main__":
@@ -874,7 +876,7 @@ if __name__ == "__main__":
     '''Batch run of same configuration'''
     # for i in range(101, 145+1):
     #     process_data(date='07_16', test_num=f'{i}', view=True, overwrite=True)
-    show_force_position(dates=['07_22'], test_nums=range(100, 100+1))
+    show_force_position(dates=['01_01'], test_nums=range(1, 1+1))
 
     # boxplot_data(rodney_config='Integrated Beam Prototype 1', date='07_03', plot_num=104)
     # boxplot_data(rodney_config='Integrated Beam Prototype 2', date='07_10', plot_num=105)

@@ -3,7 +3,7 @@ from tkinter import ttk, filedialog
 import serial.tools.list_ports
 from collect_data_DB import run_collection
 from calibration_DB import run_calibration, calculate_coefficients
-from process_DB import process_data
+from process_DB import process_data, show_force_position
 from multiprocessing import Process, Queue
 import time
 from datetime import datetime
@@ -468,7 +468,7 @@ class HardwareControlUI:
             self.process_status_var.set("Status: Test number must be a number")
             return
 
-        self.collection_process = Process(target=process_data, args=(month_date, int(test_num)))
+        self.collection_process = Process(target=show_force_position, args=([month_date], [int(test_num)]))
         self.collection_process.start()
         self.process_status_var.set("Status: Processing started")
 

@@ -214,7 +214,7 @@ class RealTimePlotWindow(QtWidgets.QMainWindow):
             # Calculate force and position
             force = (self.k_A2 * (strain_a1 - self.c_A1) - self.k_A1 * (strain_a2 - self.c_A2)) / (self.k_A1 * self.k_A2 * (self.d_A2 - self.d_A1))
             position = (self.k_A2 * self.d_A2 * (strain_a1 - self.c_A1) - self.k_A1 * self.d_A1 * (strain_a2 - self.c_A2)) / (self.k_A2 * (strain_a1 - self.c_A1) - self.k_A1 * (strain_a2 - self.c_A2))
-
+            position = max(min(position, 0.30), -0.30)
             increment = 0.05
             if time_sec - self.plot_time > increment:
                 self.time_sec = np.append(self.time_sec, time_sec)
