@@ -300,7 +300,7 @@ class LabStalkRow:
         ax[1].plot(self.time, self.position*100, label='Position')
         if hasattr(self, 'raw_force'):
             ax[0].plot(self.time, self.raw_force, label='raw', linewidth=0.5)
-            ax[1].plot(self.time, self.raw_position, label='raw', linewidth=0.5)
+            ax[1].plot(self.time, self.raw_position*100, label='raw', linewidth=0.5)
         ax[1].set_xlabel('Time (s)')
         ax[1].set_ylabel('Position (cm)')
 
@@ -1191,8 +1191,8 @@ if __name__ == "__main__":
     # print('2 mean, median', get_stats(rodney_config='Integrated Beam Prototype 2', date='07_14', plot_num=206))
     # print('3 mean, median', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_10', plot_num=207))
     # print('3 mean, median', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_11', plot_num=208))
-    # print('mean, median', get_stats(rodney_config='Integrated Beam Printed Guide 1', date='07_16', plot_num=208))
-    print('mean, median', get_stats(rodney_config='Integrated Beam Fillet 1', date='07_24', plot_num=208))
+    # print('mean, median', get_stats(rodney_config='Integrated Beam Printed Guide 1', date='07_16', plot_num=209))
+    print('mean, median', get_stats(rodney_config='Integrated Beam Fillet 1', date='07_24', plot_num=210))
     '''end statistics'''
 
     '''Single file run and view full file. Does not save result'''
