@@ -795,7 +795,7 @@ def optimize_parameters(dates, rodney_config):
         scores.append(score)
         if call[0] > 120:
             count[0] += 1
-        if score < best[0]:
+        if score < best[0] and score > 0:
             best[0] = score
             count[0] = 0
         print(f"Parameters: {[f'{p:.3f}' for p in params]}, Score: {score:.6f}, Best: {best[0]:.6f}")
@@ -805,7 +805,7 @@ def optimize_parameters(dates, rodney_config):
     def early_stopping(res):
         if len(scores) >= 30:
             print(call[0], count[0])
-            if count[0] > 100 and call[0] >= 120:
+            if count[0] > 30 and call[0] >= 120:
                 print("Early stopping: Score improvement too low")
                 return True
         return False
@@ -1010,7 +1010,7 @@ def optimize_parameters2(dates, rodney_config, stalk_type):
         
         score = get_stats2(rodney_config, stalk_type=stalk_type)[0]
         scores.append(score)
-        if call[0] > 120:
+        if call[0] > 20:
             count[0] += 1
         if score < best[0]:
             best[0] = score
@@ -1021,15 +1021,15 @@ def optimize_parameters2(dates, rodney_config, stalk_type):
     # Early stopping callback (corrected to stop after 30 calls without improvement)
     def early_stopping(res):
         print(call[0], count[0])
-        if len(scores) >= 30:
-            if count[0] > 30 and call[0] >= 120:
+        if len(scores) >= 20:
+            if count[0] > 20 and call[0] >= 50:
                 print("Early stopping: Score improvement too low")
                 return True
         return False
     
     # Perform Bayesian optimization
     print(f"Starting Bayesian optimization for {stalk_type}")
-    result = gp_minimize(objective, search_space, n_initial_points=30, n_calls=300, callback=[early_stopping])
+    result = gp_minimize(objective, search_space, n_initial_points=20, n_calls=200, callback=[early_stopping])
     
     # Extract and save best parameters
     best_params = result.x
@@ -1172,8 +1172,8 @@ if __name__ == "__main__":
     local_run_flag = True
     
     '''Batch run of same configuration'''
-    # for i in range(1, 15+1):
-    #     process_data(date='07_24', test_num=f'{i}', view=True, overwrite=True)
+    for i in range(1, 45+1):
+        process_data(date='07_24', test_num=f'{i}', view=True, overwrite=True)
     # show_force_position(dates=['07_24'], test_nums=range(1, 15+1))
 
     # boxplot_data(rodney_config='Integrated Beam Prototype 1', date='07_03', plot_num=104)
@@ -1182,6 +1182,7 @@ if __name__ == "__main__":
     # boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_10', plot_num=107)
     # boxplot_data(rodney_config='Integrated Beam Prototype 3', date='07_11', plot_num=108)
     # boxplot_data(rodney_config='Integrated Beam Printed Guide 1', date='07_16', plot_num=108)
+    boxplot_data(rodney_config='Integrated Beam Fillet 1', date='07_24', plot_num=108)
     '''end batch run'''
 
     '''Statistics'''
@@ -1191,6 +1192,7 @@ if __name__ == "__main__":
     # print('3 mean, median', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_10', plot_num=207))
     # print('3 mean, median', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_11', plot_num=208))
     # print('mean, median', get_stats(rodney_config='Integrated Beam Printed Guide 1', date='07_16', plot_num=208))
+    print('mean, median', get_stats(rodney_config='Integrated Beam Fillet 1', date='07_24', plot_num=208))
     '''end statistics'''
 
     '''Single file run and view full file. Does not save result'''
@@ -1198,6 +1200,6 @@ if __name__ == "__main__":
     '''end single file run'''
 
     # Optimize parameters for a specific configuration
-    optimize_parameters2(dates=['07_24'], rodney_config='Integrated Beam Fillet 1', stalk_type='med')
+    # optimize_parameters(dates=['07_16'], rodney_config='Integrated Beam Printed Guide 1')
 
     plt.show()
