@@ -151,6 +151,171 @@ def run_calibration(port, config, status_queue):
 
     status_queue.put("Calibration ended")
 
+def run_calibration2(port, config, status_queue):
+    """Run calibration by collecting strain data for each mass-position pair.
+
+    Args:
+        port (str): Serial port for Arduino communication.
+        config (dict): Configuration dictionary with calibration parameters.
+        status_queue (Queue): Queue to send status messages to the UI.
+    """
+    parent_folder = os.path.join('Raw Data_DOGBONE', f'{config["date"]}')
+    os.makedirs(parent_folder, exist_ok=True)
+    summary_path = os.path.join(parent_folder, f'{config["date"]}_calibration_summary2.csv')
+    summary_data = []
+
+    masses = config["masses"]
+    positions = config["positions"]
+
+    for mass in masses:
+        for position in positions:
+            try:
+                ser = serial.Serial(port, 115200, timeout=1)
+            except serial.SerialException as e:
+                status_queue.put(f"Failed to connect to {port}: {str(e)}")
+                return
+
+            count = 0
+            while True:
+                count += 1
+                incoming_data = ser.readline().decode('utf-8', errors='ignore').strip()
+                if count <= 1:
+                    time.sleep(2)
+                    status_queue.put(f"Place and settle mass {mass}g at {position}cm,\nthen press 'space' to start collection")
+                if incoming_data == "#" or keyboard.is_pressed('space'):
+                    status_queue.put(f"Starting data collection for mass {mass}g at {position}cm")
+                    break
+
+            csv_path = os.path.join(parent_folder, f'{config["date"]}_calibration2_mass_{mass}_pos_{position}.csv')
+            strains = {'1': [], '11': [], '2': [], '3': []}
+
+            with open(csv_path, 'w', newline='') as csvfile:
+                csvwriter = csv.writer(csvfile)
+                pre_test_notes = [
+                    ["pre_test_note_1", '', '', '', '', ''],
+                    ["mass (g)", mass, '', '', '', ''],
+                    ["position (cm)", position, '', '', '', ''],
+                    ["=================================================================="]
+                ]
+                for note in pre_test_notes:
+                    csvwriter.writerow(note)
+
+                headers = ['Time', 'Strain 1', 'Strain 11', 'Strain 2', 'Strain 3', 'Current Time']
+                csvwriter.writerow(headers)
+
+                time_offset_check = True
+                time_offset = 0
+
+                time.sleep(1)
+                while True:
+                    try:
+                        line = ser.readline().decode('utf-8').strip()
+                        data = line.split(',')
+
+                        if len(data) < 5:
+                            status_queue.put("Invalid data received: incomplete data packet")
+                            continue
+
+                        if data[0] == "$":
+                            status_queue.put(f"Reset at {float(data[1])*10**-6}")
+                            continue
+
+                        now = datetime.now()
+                        current_time = now.time()
+
+                        if data[0] == "test ended" or keyboard.is_pressed('space'):
+                            status_queue.put(f"Data collection ended for mass {mass}g at {position}cm")
+                            break
+
+                        if data[0] == " " or data[1] == " ":
+                            continue
+
+                        try:
+                            time_sec = float(data[0]) * 10**-6
+                            strain_yeet = float(data[1]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)
+                            strain_1 = float(data[2]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)
+                            strain_2 = float(data[3]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)
+                            strain_3 = float(data[4]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)
+                        except (ValueError, IndexError):
+                            status_queue.put("Invalid data received: cannot parse values")
+                            continue
+
+                        if time_offset_check:
+                            time_offset = time_sec
+                            time_offset_check = False
+
+                        time_sec -= time_offset
+                        csvwriter.writerow([time_sec, strain_1, strain_1, strain_2, strain_3, current_time])
+                        csvfile.flush()
+
+                        strains['1'].append(strain_1)
+                        strains['11'].append(strain_1)
+                        strains['2'].append(strain_2)
+                        strains['3'].append(strain_3)
+
+                        status_queue.put(f"After 2sec, gently remove mass. After 2 more sec,\npress 'space' to end data collection for mass {mass}g at {position}cm")
+
+                    except KeyboardInterrupt:
+                        status_queue.put("Interrupted by user")
+                        ser.close()
+                        break
+                    except Exception as e:
+                        status_queue.put(f"Error: {str(e)}")
+                        ser.close()
+                        break
+
+                ser.close()
+
+            avg_strains_no_load = { # final 100 points after mass lifted away
+                '1': np.mean(strains['1'][-100:]) if strains['1'] else 0,
+                '11': np.mean(strains['11'][-100:]) if strains['11'] else 0,
+                '2': np.mean(strains['2'][-100:]) if strains['2'] else 0,
+                '3': np.mean(strains['3'][-100:]) if strains['3'] else 0
+            }
+            avg_strains_load = {    # first 100 points with mass already on sensor when test starts
+                '1': np.mean(strains['1'][:100]) if strains['1'] else 0,
+                '11': np.mean(strains['11'][:100]) if strains['11'] else 0,
+                '2': np.mean(strains['2'][:100]) if strains['2'] else 0,
+                '3': np.mean(strains['3'][:100]) if strains['3'] else 0
+            }
+            summary_data.append([
+                mass, 
+                position, 
+                avg_strains_no_load['1'], 
+                avg_strains_no_load['11'], 
+                avg_strains_no_load['2'], 
+                avg_strains_no_load['3'],
+                avg_strains_load['1'], 
+                avg_strains_load['11'], 
+                avg_strains_load['2'], 
+                avg_strains_load['3']
+            ])
+
+    with open(summary_path, 'w', newline='') as csvfile:
+        csvwriter = csv.writer(csvfile)
+        pre_test_notes = [
+            ["=================================================================="]
+        ]
+        for note in pre_test_notes:
+            csvwriter.writerow(note)
+
+        headers = [
+            'Mass (g)', 
+            'Position (cm)', 
+            'Avg Strain 1 (No Load)', 
+            'Avg Strain 11 (No Load)', 
+            'Avg Strain 2 (No Load)', 
+            'Avg Strain 3 (No Load)',
+            'Avg Strain 1 (Load)', 
+            'Avg Strain 11 (Load)', 
+            'Avg Strain 2 (Load)', 
+            'Avg Strain 3 (Load)']
+        csvwriter.writerow(headers)
+        for row in summary_data:
+            csvwriter.writerow(row)
+
+    status_queue.put("Calibration ended")
+
 def generate_summary(date):
     """Generate a summary CSV from all calibration data files for a given date.
 
@@ -221,6 +386,128 @@ def generate_summary(date):
         csvwriter.writerow(["=================================================================="])
         csvwriter.writerow(['Mass (g)', 'Position (cm)', 'Avg Strain 1', 'Avg Strain 11', 'Avg Strain 2', 'Avg Strain 3',
                             'Std Strain 1', 'Std Strain 11', 'Std Strain 2', 'Std Strain 3'])
+        for row in summary_data:
+            print(row)
+            csvwriter.writerow(row)
+
+def generate_summary2(date):
+    """Generate a summary CSV from all calibration data files for a given date.
+
+    Args:
+        date (str): Date string for the folder containing calibration data.
+    """
+    parent_folder = os.path.join('Raw Data_DOGBONE', f'{date}')
+    summary_path = os.path.join(parent_folder, f'{date}_calibration_summary.csv')
+    summary_data = []
+
+    if not os.path.exists(parent_folder):
+        return
+
+    for file_name in os.listdir(parent_folder):
+        if file_name.endswith('.csv') and 'calibration_mass' in file_name:
+            print('trying a file')
+            file_path = os.path.join(parent_folder, file_name)
+            # try:
+            #     mass = int(file_name.split('_mass_')[1].split('_pos_')[0])
+            #     position = int(file_name.split('_pos_')[1].split('.csv')[0])
+            # except (IndexError, ValueError):
+            #     print('file failed')
+            #     continue
+
+            strains = {'1': [], '11': [], '2': [], '3': []}
+            with open(file_path, 'r') as csvfile:
+                print('opened a file')
+                csvreader = csv.reader(csvfile)
+                header = True
+                for row in csvreader:
+                    if row[0] == 'mass (g)':
+                        mass = row[1]
+                    if row[0] == 'position (cm)':
+                        position = row[1]
+                    if header and row and row[0] == 'Time':
+                        header = False
+                        continue
+                    if not header and len(row) >= 5:
+                        try:
+                            strain_1 = float(row[1])
+                            strain_11 = float(row[2])
+                            strain_2 = float(row[3])
+                            strain_3 = float(row[4])
+                            strains['1'].append(strain_1)
+                            strains['11'].append(strain_11)
+                            strains['2'].append(strain_2)
+                            strains['3'].append(strain_3)
+                        except (ValueError, IndexError):
+                            continue
+
+            avg_strains_no_load = { # final 100 points after mass lifted away
+                '1': np.mean(strains['1'][-100:]) if strains['1'] else 0,
+                '11': np.mean(strains['11'][-100:]) if strains['11'] else 0,
+                '2': np.mean(strains['2'][-100:]) if strains['2'] else 0,
+                '3': np.mean(strains['3'][-100:]) if strains['3'] else 0
+            }
+            avg_strains_load = {    # first 100 points with mass already on sensor when test starts
+                '1': np.mean(strains['1'][:100]) if strains['1'] else 0,
+                '11': np.mean(strains['11'][:100]) if strains['11'] else 0,
+                '2': np.mean(strains['2'][:100]) if strains['2'] else 0,
+                '3': np.mean(strains['3'][:100]) if strains['3'] else 0
+            }
+            stddev_strains_no_load = {
+                '1': np.std(strains['1'][-100]) if strains['1'] else 0,
+                '11': np.std(strains['11'][-100]) if strains['11'] else 0,
+                '2': np.std(strains['2'][-100]) if strains['2'] else 0,
+                '3': np.std(strains['3'][-100]) if strains['3'] else 0
+            }
+            stddev_strains_load = {
+                '1': np.std(strains['1'][100]) if strains['1'] else 0,
+                '11': np.std(strains['11'][100]) if strains['11'] else 0,
+                '2': np.std(strains['2'][100]) if strains['2'] else 0,
+                '3': np.std(strains['3'][100]) if strains['3'] else 0
+            }
+            summary_data.append([
+                mass, 
+                position, 
+                avg_strains_no_load['1'], 
+                avg_strains_no_load['11'], 
+                avg_strains_no_load['2'], 
+                avg_strains_no_load['3'],
+                avg_strains_load['1'], 
+                avg_strains_load['11'], 
+                avg_strains_load['2'], 
+                avg_strains_load['3'],
+                stddev_strains_no_load['1'], 
+                stddev_strains_no_load['11'], 
+                stddev_strains_no_load['2'], 
+                stddev_strains_no_load['3'],
+                stddev_strains_load['1'], 
+                stddev_strains_load['11'], 
+                stddev_strains_load['2'], 
+                stddev_strains_load['3']
+            ])
+
+    with open(summary_path, 'w', newline='') as csvfile:
+        csvwriter = csv.writer(csvfile)
+        csvwriter.writerow(["====="])
+        csvwriter.writerow([
+            'Mass (g)', 
+            'Position (cm)', 
+            'Avg Strain 1 (No Load)', 
+            'Avg Strain 11 (No Load)', 
+            'Avg Strain 2 (No Load)', 
+            'Avg Strain 3 (No Load)',
+            'Avg Strain 1 (Load)', 
+            'Avg Strain 11 (Load)', 
+            'Avg Strain 2 (Load)', 
+            'Avg Strain 3 (Load)',
+            'Std Strain 1 (No Load)', 
+            'Std Strain 11 (No Load)', 
+            'Std Strain 2 (No Load)', 
+            'Std Strain 3 (No Load)',
+            'Std Strain 1 (Load)', 
+            'Std Strain 11 (Load)', 
+            'Std Strain 2 (Load)', 
+            'Std Strain 3 (Load)'
+        ])
         for row in summary_data:
             print(row)
             csvwriter.writerow(row)

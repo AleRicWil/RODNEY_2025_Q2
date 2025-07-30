@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog
 import serial.tools.list_ports
 from collect_data_DB import run_collection
-from calibration_DB import run_calibration, calculate_coefficients
+from calibration_DB import run_calibration, calculate_coefficients, run_calibration2
 from process_DB import process_data, show_force_position
 from multiprocessing import Process, Queue
 import time
@@ -208,6 +208,8 @@ class HardwareControlUI:
 
         self.calibrate_button = ttk.Button(page, text="Start Calibration", command=self.start_calibration, state="disabled")
         self.calibrate_button.pack(pady=5)
+        self.calibrate_button2 = ttk.Button(page, text="Start Calibration 2", command=self.start_calibration2, state="disabled")
+        self.calibrate_button2.pack(pady=5)
 
         self.load_summary_button = ttk.Button(page, text="Load Summary CSV", command=self.load_summary_csv)
         self.load_summary_button.pack(pady=5)
@@ -387,6 +389,57 @@ class HardwareControlUI:
         self.collection_process = Process(target=run_calibration, args=(selected_port, config, self.status_queue))
         self.collection_process.start()
         self.check_status_queue()
+
+    def start_calibration2(self):
+        """Start calibration in a separate process."""
+        self.calibrate_button["state"] = "disabled"
+        self.root.update()
+        time.sleep(1)
+        selected_port = self.cal_port_var.get()
+        month_date = self.cal_month_date_var.get()
+        masses = self.masses_var.get()
+        positions = self.positions_var.get()
+
+        if not month_date or not masses or not positions:
+            self.cal_status_var.set("Status: Please enter all fields")
+            self.cal_connect_button["state"] = "normal"
+            self.calibrate_button["state"] = "normal"
+            return
+        if not month_date.replace("_", "").isdigit() or len(month_date) != 5 or month_date[2] != "_":
+            self.cal_status_var.set("Status: Invalid date format (use MM_DD)")
+            self.cal_connect_button["state"] = "normal"
+            self.calibrate_button["state"] = "normal"
+            return
+
+        try:
+            masses_list = [float(m) for m in masses.split()]
+            positions_list = [float(p) for p in positions.split()]
+            if not masses_list or not positions_list:
+                raise ValueError
+        except ValueError:
+            self.cal_status_var.set("Status: Masses and positions must be numbers")
+            self.cal_connect_button["state"] = "normal"
+            self.calibrate_button["state"] = "normal"
+            return
+
+        config = {
+            "date": month_date,
+            "masses": masses_list,
+            "positions": positions_list,
+            "configuration": "Config 1",
+            "pvc_stiffness": "Med",
+            "height": 80.645,
+            "yaw": 5,
+            "pitch": 0,
+            "roll": 0,
+            "rate_of_travel": 25,
+            "angle_of_travel": 0,
+            "offset_distance": 25,
+        }
+        self.collection_process = Process(target=run_calibration2, args=(selected_port, config, self.status_queue))
+        self.collection_process.start()
+        self.check_status_queue()
+
 
     def load_summary_csv(self):
         """Open a file dialog to select and read a calibration summary CSV."""
