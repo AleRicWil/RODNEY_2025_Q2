@@ -307,6 +307,7 @@ class HardwareControlUI:
             self.cal_connect_button["state"] = "normal"
             return
         self.calibrate_button["state"] = "normal"
+        self.calibrate_button2["state"] = "normal"
         self.cal_status_var.set(f"Status: Ready to calibrate from {selected_port}")
 
     def start_collection(self):
@@ -392,7 +393,7 @@ class HardwareControlUI:
 
     def start_calibration2(self):
         """Start calibration in a separate process."""
-        self.calibrate_button["state"] = "disabled"
+        self.calibrate_button2["state"] = "disabled"
         self.root.update()
         time.sleep(1)
         selected_port = self.cal_port_var.get()
@@ -419,7 +420,7 @@ class HardwareControlUI:
         except ValueError:
             self.cal_status_var.set("Status: Masses and positions must be numbers")
             self.cal_connect_button["state"] = "normal"
-            self.calibrate_button["state"] = "normal"
+            self.calibrate_button2["state"] = "normal"
             return
 
         config = {

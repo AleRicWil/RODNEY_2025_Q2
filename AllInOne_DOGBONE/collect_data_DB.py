@@ -147,13 +147,13 @@ class RealTimePlotWindow(QtWidgets.QMainWindow):
         self.plot_pos = self.win_force_pos.addPlot(title='Position Vs Time')
         self.curve_pos = self.plot_pos.plot(pen='y', name='Position')
 
-        self.time_sec = np.array([])
-        self.strain_yeet = np.array([])
-        self.strain_1 = np.array([])
-        self.strain_2 = np.array([])
-        self.strain_3 = np.array([])
-        self.force = np.array([])
-        self.position = np.array([])
+        self.time_sec = []
+        self.strain_yeet = []
+        self.strain_1 = []
+        self.strain_2 = []
+        self.strain_3 = []
+        self.force = []
+        self.position = []
 
         self.time_offset_check = True
         self.time_offset = 0
@@ -211,17 +211,18 @@ class RealTimePlotWindow(QtWidgets.QMainWindow):
             self.csvfile.flush()
 
             # Calculate force and position
-            force = (self.k_2 * (strain_1 - self.c_1) - self.k_1 * (strain_2 - self.c_2)) / (self.k_1 * self.k_2 * (self.d_2 - self.d_1))
-            position = (self.k_2 * self.d_2 * (strain_1 - self.c_1) - self.k_1 * self.d_1 * (strain_2 - self.c_2)) / (self.k_2 * (strain_1 - self.c_1) - self.k_1 * (strain_2 - self.c_2))
+            force = (self.k_3 * (strain_1 - self.c_1) - self.k_1 * (strain_3 - self.c_3)) / (self.k_1 * self.k_3 * (self.d_3 - self.d_1))
+            position = (self.k_3 * self.d_3 * (strain_1 - self.c_1) - self.k_1 * self.d_1 * (strain_3 - self.c_3)) / (self.k_3 * (strain_1 - self.c_1) - self.k_1 * (strain_3 - self.c_3))
+            position = np.clip(position, -0.5, 0.5)
 
             increment = 0.05
             if time_sec - self.plot_time > increment:
-                self.time_sec = np.append(self.time_sec, time_sec)
-                self.strain_1 = np.append(self.strain_1, strain_1)
-                self.strain_2 = np.append(self.strain_2, strain_2)
-                self.strain_3 = np.append(self.strain_3, strain_3)
-                self.force = np.append(self.force, force)
-                self.position = np.append(self.position, position * 100)  # Convert to cm
+                self.time_sec.append(time_sec)
+                self.strain_1.append(strain_1)
+                self.strain_2.append(strain_2)
+                self.strain_3.append(strain_3)
+                self.force.append(force)
+                self.position.append(position * 100)  # Convert to cm
 
                 # Update strain plots
                 # self.curve_a1.setData(self.time_sec, self.strain_a1)

@@ -266,17 +266,29 @@ def run_calibration2(port, config, status_queue):
 
                 ser.close()
 
-            avg_strains_no_load = { # final 100 points after mass lifted away
-                '1': np.mean(strains['1'][-100:]) if strains['1'] else 0,
-                '11': np.mean(strains['11'][-100:]) if strains['11'] else 0,
-                '2': np.mean(strains['2'][-100:]) if strains['2'] else 0,
-                '3': np.mean(strains['3'][-100:]) if strains['3'] else 0
+            avg_strains_no_load = { # final 200 points after mass lifted away
+                '1': np.mean(strains['1'][-200:]) if strains['1'] else 0,
+                '11': np.mean(strains['11'][-200:]) if strains['11'] else 0,
+                '2': np.mean(strains['2'][-200:]) if strains['2'] else 0,
+                '3': np.mean(strains['3'][-200:]) if strains['3'] else 0
             }
-            avg_strains_load = {    # first 100 points with mass already on sensor when test starts
-                '1': np.mean(strains['1'][:100]) if strains['1'] else 0,
-                '11': np.mean(strains['11'][:100]) if strains['11'] else 0,
-                '2': np.mean(strains['2'][:100]) if strains['2'] else 0,
-                '3': np.mean(strains['3'][:100]) if strains['3'] else 0
+            avg_strains_load = {    # first 200 points with mass already on sensor when test starts
+                '1': np.mean(strains['1'][:200]) if strains['1'] else 0,
+                '11': np.mean(strains['11'][:200]) if strains['11'] else 0,
+                '2': np.mean(strains['2'][:200]) if strains['2'] else 0,
+                '3': np.mean(strains['3'][:200]) if strains['3'] else 0
+            }
+            stddev_strains_no_load = {
+                '1': np.std(strains['1'][-200:]) if strains['1'] else 0,
+                '11': np.std(strains['11'][-200:]) if strains['11'] else 0,
+                '2': np.std(strains['2'][-200:]) if strains['2'] else 0,
+                '3': np.std(strains['3'][-200:]) if strains['3'] else 0
+            }
+            stddev_strains_load = {
+                '1': np.std(strains['1'][:200]) if strains['1'] else 0,
+                '11': np.std(strains['11'][:200]) if strains['11'] else 0,
+                '2': np.std(strains['2'][:200]) if strains['2'] else 0,
+                '3': np.std(strains['3'][:200]) if strains['3'] else 0
             }
             summary_data.append([
                 mass, 
@@ -288,13 +300,21 @@ def run_calibration2(port, config, status_queue):
                 avg_strains_load['1'], 
                 avg_strains_load['11'], 
                 avg_strains_load['2'], 
-                avg_strains_load['3']
+                avg_strains_load['3'],
+                stddev_strains_no_load['1'], 
+                stddev_strains_no_load['11'], 
+                stddev_strains_no_load['2'], 
+                stddev_strains_no_load['3'],
+                stddev_strains_load['1'], 
+                stddev_strains_load['11'], 
+                stddev_strains_load['2'], 
+                stddev_strains_load['3']
             ])
 
     with open(summary_path, 'w', newline='') as csvfile:
         csvwriter = csv.writer(csvfile)
         pre_test_notes = [
-            ["=================================================================="]
+            ["====="]
         ]
         for note in pre_test_notes:
             csvwriter.writerow(note)
@@ -309,7 +329,15 @@ def run_calibration2(port, config, status_queue):
             'Avg Strain 1 (Load)', 
             'Avg Strain 11 (Load)', 
             'Avg Strain 2 (Load)', 
-            'Avg Strain 3 (Load)']
+            'Avg Strain 3 (Load)',
+            'Std Strain 1 (No Load)', 
+            'Std Strain 11 (No Load)', 
+            'Std Strain 2 (No Load)', 
+            'Std Strain 3 (No Load)',
+            'Std Strain 1 (Load)', 
+            'Std Strain 11 (Load)', 
+            'Std Strain 2 (Load)', 
+            'Std Strain 3 (Load)']
         csvwriter.writerow(headers)
         for row in summary_data:
             csvwriter.writerow(row)
@@ -397,14 +425,14 @@ def generate_summary2(date):
         date (str): Date string for the folder containing calibration data.
     """
     parent_folder = os.path.join('Raw Data_DOGBONE', f'{date}')
-    summary_path = os.path.join(parent_folder, f'{date}_calibration_summary.csv')
+    summary_path = os.path.join(parent_folder, f'{date}_calibration_summary2.csv')
     summary_data = []
 
     if not os.path.exists(parent_folder):
         return
 
     for file_name in os.listdir(parent_folder):
-        if file_name.endswith('.csv') and 'calibration_mass' in file_name:
+        if file_name.endswith('.csv') and 'calibration2_mass' in file_name:
             print('trying a file')
             file_path = os.path.join(parent_folder, file_name)
             # try:
@@ -440,29 +468,29 @@ def generate_summary2(date):
                         except (ValueError, IndexError):
                             continue
 
-            avg_strains_no_load = { # final 100 points after mass lifted away
-                '1': np.mean(strains['1'][-100:]) if strains['1'] else 0,
-                '11': np.mean(strains['11'][-100:]) if strains['11'] else 0,
-                '2': np.mean(strains['2'][-100:]) if strains['2'] else 0,
-                '3': np.mean(strains['3'][-100:]) if strains['3'] else 0
+            avg_strains_no_load = { # final 200 points after mass lifted away
+                '1': np.mean(strains['1'][-200:]) if strains['1'] else 0,
+                '11': np.mean(strains['11'][-200:]) if strains['11'] else 0,
+                '2': np.mean(strains['2'][-200:]) if strains['2'] else 0,
+                '3': np.mean(strains['3'][-200:]) if strains['3'] else 0
             }
-            avg_strains_load = {    # first 100 points with mass already on sensor when test starts
-                '1': np.mean(strains['1'][:100]) if strains['1'] else 0,
-                '11': np.mean(strains['11'][:100]) if strains['11'] else 0,
-                '2': np.mean(strains['2'][:100]) if strains['2'] else 0,
-                '3': np.mean(strains['3'][:100]) if strains['3'] else 0
+            avg_strains_load = {    # first 200 points with mass already on sensor when test starts
+                '1': np.mean(strains['1'][:200]) if strains['1'] else 0,
+                '11': np.mean(strains['11'][:200]) if strains['11'] else 0,
+                '2': np.mean(strains['2'][:200]) if strains['2'] else 0,
+                '3': np.mean(strains['3'][:200]) if strains['3'] else 0
             }
             stddev_strains_no_load = {
-                '1': np.std(strains['1'][-100]) if strains['1'] else 0,
-                '11': np.std(strains['11'][-100]) if strains['11'] else 0,
-                '2': np.std(strains['2'][-100]) if strains['2'] else 0,
-                '3': np.std(strains['3'][-100]) if strains['3'] else 0
+                '1': np.std(strains['1'][-200:]) if strains['1'] else 0,
+                '11': np.std(strains['11'][-200:]) if strains['11'] else 0,
+                '2': np.std(strains['2'][-200:]) if strains['2'] else 0,
+                '3': np.std(strains['3'][-200:]) if strains['3'] else 0
             }
             stddev_strains_load = {
-                '1': np.std(strains['1'][100]) if strains['1'] else 0,
-                '11': np.std(strains['11'][100]) if strains['11'] else 0,
-                '2': np.std(strains['2'][100]) if strains['2'] else 0,
-                '3': np.std(strains['3'][100]) if strains['3'] else 0
+                '1': np.std(strains['1'][:200]) if strains['1'] else 0,
+                '11': np.std(strains['11'][:200]) if strains['11'] else 0,
+                '2': np.std(strains['2'][:200]) if strains['2'] else 0,
+                '3': np.std(strains['3'][:200]) if strains['3'] else 0
             }
             summary_data.append([
                 mass, 
@@ -509,7 +537,6 @@ def generate_summary2(date):
             'Std Strain 3 (Load)'
         ])
         for row in summary_data:
-            print(row)
             csvwriter.writerow(row)
 
 def calculate_coefficients(calibration_data, cal_status_var):
@@ -628,4 +655,4 @@ def calculate_coefficients(calibration_data, cal_status_var):
         return ""
     
 if __name__ == '__main__':
-    generate_summary(date='01_01')
+    generate_summary2(date='07_30')
