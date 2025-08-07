@@ -1307,7 +1307,7 @@ if __name__ == "__main__":
     '''Batch run of same configuration'''
     # for i in range(1, 1+1):
     #     process_data(date='08_06', test_num=f'{i}', view=True, overwrite=True)
-    show_force_position(dates=['08_06'], test_nums=[5])
+    show_force_position(dates=['08_06'], test_nums=[1])
 
     # boxplot_data(rodney_config='Integrated Beam Prototype 1', date='07_03', plot_num=104)
     # boxplot_data(rodney_config='Integrated Beam Prototype 2', date='07_10', plot_num=105)
