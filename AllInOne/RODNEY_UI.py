@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog
 import serial.tools.list_ports
 from collect_data import run_collection
-from calibration import run_calibration, calculate_coefficients
+from calibration import run_calibration, calculate_coefficients, run_accel_calibration
 from process import process_data, show_force_position
 from multiprocessing import Process, Queue
 import time
@@ -206,8 +206,11 @@ class HardwareControlUI:
         self.positions_entry = ttk.Entry(page, textvariable=self.positions_var, width=20)
         self.positions_entry.pack(pady=5)
 
-        self.calibrate_button = ttk.Button(page, text="Start Calibration", command=self.start_calibration, state="disabled")
+        self.calibrate_button = ttk.Button(page, text="Start Strain Calibration", command=self.start_calibration, state="disabled")
         self.calibrate_button.pack(pady=5)
+
+        self.calibrate_accel_button = ttk.Button(page, text="Start Accel Calibration", command=self.start_accel_calibration, state="disabled")
+        self.calibrate_accel_button.pack(pady=5)
 
         self.load_summary_button = ttk.Button(page, text="Load Summary CSV", command=self.load_summary_csv)
         self.load_summary_button.pack(pady=5)
@@ -305,6 +308,7 @@ class HardwareControlUI:
             self.cal_connect_button["state"] = "normal"
             return
         self.calibrate_button["state"] = "normal"
+        self.calibrate_accel_button["state"] = "normal"
         self.cal_status_var.set(f"Status: Ready to calibrate from {selected_port}")
 
     def start_collection(self):
@@ -385,6 +389,21 @@ class HardwareControlUI:
             "offset_distance": 25,
         }
         self.collection_process = Process(target=run_calibration, args=(selected_port, config, self.status_queue))
+        self.collection_process.start()
+        self.check_status_queue()
+
+    def start_accel_calibration(self):
+        """Start accel calibration in a separate process."""
+        self.calibrate_accel_button["state"] = "disabled"
+        self.root.update()
+        time.sleep(1)
+        selected_port = self.cal_port_var.get()
+        month_date = self.cal_month_date_var.get()
+
+        config = {
+            "date": month_date,
+        }
+        self.collection_process = Process(target=run_accel_calibration, args=(selected_port, config, self.status_queue))
         self.collection_process.start()
         self.check_status_queue()
 
@@ -485,6 +504,7 @@ class HardwareControlUI:
         """Reset the Calibrate page to initial state for a new calibration."""
         self.cal_connect_button["state"] = "normal" if self.cal_available_ports else "disabled"
         self.calibrate_button["state"] = "normal" if self.cal_port_var.get() else "disabled"
+        self.calibrate_accel_button["state"] = "normal" if self.cal_port_var.get() else "disabled"
         self.cal_month_date_var.set(datetime.now().strftime("%m_%d"))
         self.masses_var.set("")
         self.positions_var.set("")

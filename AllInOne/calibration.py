@@ -3,10 +3,10 @@ import csv
 import keyboard
 import numpy as np
 from datetime import datetime
-from multiprocessing import Queue
 import time
 import os
 from sklearn.linear_model import LinearRegression
+from scipy.optimize import minimize
 
 # Constants
 SUPPLY_VOLTAGE = 5
@@ -32,7 +32,7 @@ def run_calibration(port, config, status_queue):
     for mass in masses:
         for position in positions:
             try:
-                ser = serial.Serial(port, 115200, timeout=1)
+                ser = serial.Serial(port, 230400, timeout=1)
             except serial.SerialException as e:
                 status_queue.put(f"Failed to connect to {port}: {str(e)}")
                 return
@@ -253,3 +253,177 @@ def calculate_coefficients(calibration_data, cal_status_var):
     except Exception as e:
         cal_status_var.set(f"Status: Error calculating coefficients: {str(e)}")
         return ""
+    
+
+def compute_accel_calibration(measurements, status_queue, g=1):
+    """Compute calibration offsets and gains using least-squares optimization.
+    
+    Args:
+        measurements (np.array): Array of shape (N, 3) with raw [x, y, z] samples for N orientations.
+        status_queue (Queue): Queue to send status messages to the UI.
+        g (float): Gravity acceleration in m/s² (default: 9.81).
+    
+    Returns:
+        offsets (np.array): Offsets for [x, y, z].
+        gains (np.array): Gains for [x, y, z].
+    """
+    # Validate input data
+    if len(measurements) < 6:
+        status_queue.put("Error: Fewer than 6 orientations provided.")
+        return None, None
+    spreads = np.max(measurements, axis=0) - np.min(measurements, axis=0)
+    if np.any(spreads < 0.1 * np.max(spreads)):
+        status_queue.put("Warning: Measurements lack sufficient variation in one or more axes.")
+        # Continue with fallback if optimization fails
+
+    def calibration_error(params, measurements, g):
+        offsets = params[:3]
+        gains = params[3:]
+        error = 0
+        for meas in measurements:
+            corrected = (meas - offsets) / gains
+            magnitude = np.sqrt(np.sum(corrected**2))
+            error += (magnitude - g)**2
+        return error
+
+    # Improved initial guess
+    offsets_guess = np.mean(measurements, axis=0)
+    ranges = np.max(measurements, axis=0) - np.min(measurements, axis=0)
+    gains_guess = ranges / (2 * g)  # Assume range spans ±1g
+    initial_guess = np.concatenate([offsets_guess, gains_guess])
+
+    # Optimize with SLSQP for robustness
+    result = minimize(
+        calibration_error,
+        initial_guess,
+        args=(measurements, g),
+        method='SLSQP',
+        bounds=[(None, None)]*3 + [(0.1, None)]*3,  # Gains must be positive
+        options={'maxiter': 1000, 'disp': False}
+    )
+
+    if result.success:
+        offsets = result.x[:3]
+        gains = result.x[3:]
+        status_queue.put(f"Optimization successful. Final error: {result.fun:.6f}")
+    else:
+        status_queue.put("Optimization failed. Using approximate calibration parameters.")
+        offsets = offsets_guess
+        gains = gains_guess  # Fallback to approximate values
+
+    return offsets, gains
+
+def run_accel_calibration(port, config, status_queue):
+    """Run accelerometer calibration by collecting data in six stationary orientations.
+
+    Args:
+        port (str): Serial port for Arduino communication.
+        config (dict): Configuration dictionary with calibration parameters.
+        status_queue (Queue): Queue to send status messages to the UI.
+    """
+    parent_folder = os.path.join('Raw Data', f'{config["date"]}')
+    os.makedirs(parent_folder, exist_ok=True)
+    csv_path = os.path.join(parent_folder, f'{config["date"]}_accel_calibration.csv')
+
+    orientations = [
+        "X-axis up",
+        "X-axis down",
+        "Y-axis up",
+        "Y-axis down",
+        "Z-axis up",
+        "Z-axis down"
+    ]
+    stationary_samples = []
+
+    with open(csv_path, 'w', newline='') as csvfile:
+        csvwriter = csv.writer(csvfile)
+        # Write pre-test notes
+        pre_test_notes = [
+            ["pre_test_note_1", '', '', '', '', ''],
+            ["====="]
+        ]
+        for note in pre_test_notes:
+            csvwriter.writerow(note)
+        headers = ['Time', 'Accel X', 'Accel Y', 'Accel Z', 'Orientation']
+        csvwriter.writerow(headers)
+
+        time_offset = 0
+        time_offset_check = True
+
+        for orientation in orientations:
+            try:
+                ser = serial.Serial(port, 230400, timeout=1)
+            except serial.SerialException as e:
+                status_queue.put(f"Failed to connect to {port}: {str(e)}")
+                return
+
+            # Wait for user to start
+            count = 0
+            while True:
+                count += 1
+                incoming_data = ser.readline().decode('utf-8', errors='ignore').strip()
+                if count <= 1:
+                    time.sleep(2)
+                    status_queue.put(f"Press 'space' to start {orientation} for 5 seconds")
+                if incoming_data == "#" or keyboard.is_pressed('space'):
+                    status_queue.put("Starting")
+                    break
+            
+            status_queue.put(f"Collecting data for {orientation}...")
+            start_time = time.time()
+            temp_data = []
+
+            while time.time() - start_time < 3:
+                line = ser.readline().decode('utf-8').strip()
+                if line.startswith('$'):
+                    status_queue.put(f"Reset detected at {float(line.split(',')[1])*1e-6}")
+                    ser.close()
+                    return
+                data = line.split(',')
+                if len(data) == 11 - 3 - 2:  # Match original data format
+                    try:
+                        time_sec = float(data[0]) * 1e-6
+                        acx1 = float(data[3])
+                        acy1 = float(data[4])
+                        acz1 = float(data[5])
+                        if time_offset_check:
+                            time_offset = time_sec
+                            time_offset_check = False
+                        time_sec -= time_offset
+                        csvwriter.writerow([time_sec, acx1, acy1, acz1, orientation])
+                        temp_data.append([acx1, acy1, acz1])
+                    except (ValueError, IndexError):
+                        continue
+
+            if temp_data:
+                avg_sample = np.mean(temp_data, axis=0)
+                stationary_samples.append(avg_sample)
+                status_queue.put(f"Data collected for {orientation}")
+                ser.close()
+            else:
+                status_queue.put(f"Warning: No data collected for {orientation}")
+                ser.close()
+                return
+
+    ser.close()
+
+    # Perform calibration
+    if len(stationary_samples) < 6:
+        status_queue.put("Error: Insufficient data for calibration (need 6 orientations)")
+        return
+    measurements = np.array(stationary_samples)
+    offsets, gains = compute_accel_calibration(measurements, status_queue)
+
+    # Save results
+    parent_folder = r'AllInOne'
+    os.makedirs(parent_folder, exist_ok=True)
+    summary_path = os.path.join(parent_folder, 'accel_calibration_history.csv')
+    with open(summary_path, 'w', newline='') as summaryfile:
+        summarywriter = csv.writer(summaryfile)
+        summarywriter.writerow(['Date', 'Offset X', 'Offset Y', 'Offset Z', 'Gain X', 'Gain Y', 'Gain Z'])
+        summarywriter.writerow([datetime.now().strftime("%m_%d_%Y"), *offsets, *gains])
+
+    result = (f"Offsets: x={offsets[0]:.6f}, y={offsets[1]:.6f}, z={offsets[2]:.6f}\n"
+              f"Gains: x={gains[0]:.6f}, y={gains[1]:.6f}, z={gains[2]:.6f}")
+    status_queue.put(f"Calibration completed:\n{result}")
+    return result
