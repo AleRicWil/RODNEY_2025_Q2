@@ -129,9 +129,9 @@ class LabStalkRow:
         t_start = self.time[0]
         t_end = self.time[-1]
 
-        self.strain_a1_ini = np.mean(self.strain_1[0:zero_cutoff])
+        self.strain_1_ini = np.mean(self.strain_1[0:zero_cutoff])
         self.strain_b1_ini = np.mean(self.strain_b1[0:zero_cutoff])
-        self.strain_a2_ini = np.mean(self.strain_2[0:zero_cutoff])
+        self.strain_2_ini = np.mean(self.strain_2[0:zero_cutoff])
         self.strain_b2_ini = np.mean(self.strain_b2[0:zero_cutoff])
 
         strain_a1_end = np.mean(self.strain_1[-zero_cutoff:])
@@ -139,19 +139,19 @@ class LabStalkRow:
         strain_a2_end = np.mean(self.strain_2[-zero_cutoff:])
         strain_b2_end = np.mean(self.strain_b2[-zero_cutoff:])
 
-        a1_drift_slope = (strain_a1_end - self.strain_a1_ini) / (t_end - t_start)
+        a1_drift_slope = (strain_a1_end - self.strain_1_ini) / (t_end - t_start)
         b1_drift_slope = (strain_b1_end - self.strain_b1_ini) / (t_end - t_start)
-        a2_drift_slope = (strain_a2_end - self.strain_a2_ini) / (t_end - t_start)
+        a2_drift_slope = (strain_a2_end - self.strain_2_ini) / (t_end - t_start)
         b2_drift_slope = (strain_b2_end - self.strain_b2_ini) / (t_end - t_start)
 
-        self.a1_drift = a1_drift_slope * self.time + self.strain_a1_ini
+        self.a1_drift = a1_drift_slope * self.time + self.strain_1_ini
         self.b1_drift = b1_drift_slope * self.time + self.strain_b1_ini
-        self.a2_drift = a2_drift_slope * self.time + self.strain_a2_ini
+        self.a2_drift = a2_drift_slope * self.time + self.strain_2_ini
         self.b2_drift = b2_drift_slope * self.time + self.strain_b2_ini
 
-        corrected_a1 = self.strain_1 - (self.a1_drift - self.strain_a1_ini)
+        corrected_a1 = self.strain_1 - (self.a1_drift - self.strain_1_ini)
         corrected_b1 = self.strain_b1 - (self.b1_drift - self.strain_b1_ini)
-        corrected_a2 = self.strain_2 - (self.a2_drift - self.strain_a2_ini)
+        corrected_a2 = self.strain_2 - (self.a2_drift - self.strain_2_ini)
         corrected_b2 = self.strain_b2 - (self.b2_drift - self.strain_b2_ini)
 
         self.strain_1 = corrected_a1
@@ -162,23 +162,23 @@ class LabStalkRow:
     def shift_initials(self, initial_force=0, initial_position=0, zero_cutoff=200):
         '''Adjusts the calibration coefficients so the initial force from
         calculate_force_position() equals initial_force'''
-        self.strain_a1_ini = np.mean(self.strain_1[0:zero_cutoff])
+        self.strain_1_ini = np.mean(self.strain_1[0:zero_cutoff])
+        self.strain_2_ini = np.mean(self.strain_2[0:zero_cutoff])
         self.strain_b1_ini = np.mean(self.strain_b1[0:zero_cutoff])
-        self.strain_a2_ini = np.mean(self.strain_2[0:zero_cutoff])
         self.strain_b2_ini = np.mean(self.strain_b2[0:zero_cutoff])
 
-        self.c_A1 = self.strain_a1_ini
+        self.c_1 = self.strain_1_ini
+        self.c_2 = self.strain_2_ini
         self.c_B1 = self.strain_b1_ini
-        self.c_A2 = self.strain_a2_ini
         self.c_B2 = self.strain_b2_ini
 
     def calc_force_position(self, smooth=True, window=100, order=2, small_den_cutoff=0.000035):
-        self.force_num = self.k_A2 * (self.strain_1 - self.c_A1) - self.k_A1 * (self.strain_2 - self.c_A2)
+        self.force_num = self.k_A2 * (self.strain_1 - self.c_1) - self.k_A1 * (self.strain_2 - self.c_2)
         self.force_den = self.k_A1 * self.k_A2 * (self.d_A2 - self.d_A1)
         self.force = self.force_num / self.force_den
         
-        self.pos_num = self.k_A2 * self.d_A2 * (self.strain_1 - self.c_A1) - self.k_A1 * self.d_A1 * (self.strain_2 - self.c_A2)
-        self.pos_den = self.k_A2 * (self.strain_1 - self.c_A1) - self.k_A1 * (self.strain_2 - self.c_A2)
+        self.pos_num = self.k_A2 * self.d_A2 * (self.strain_1 - self.c_1) - self.k_A1 * self.d_A1 * (self.strain_2 - self.c_2)
+        self.pos_den = self.k_A2 * (self.strain_1 - self.c_1) - self.k_A1 * (self.strain_2 - self.c_2)
         self.position = np.where(np.abs(self.pos_den) < small_den_cutoff, 0, self.pos_num / self.pos_den)
         
         if smooth:
@@ -332,9 +332,9 @@ class LabStalkRow:
             for i in range(len(self.stalk_times)):
                 if not np.isnan(self.stalk_times[i]).all():
                     ax[0].plot(self.stalk_times[i], self.stalk_forces[i], c='red')
-                    ax[0].plot(self.stalk_times[i], self.force_fits[i], c='green')
+                    # ax[0].plot(self.stalk_times[i], self.force_fits[i], c='green')
                     ax[1].plot(self.stalk_times[i], self.stalk_positions[i]*100, c='red')
-                    ax[1].plot(self.stalk_times[i], self.position_fits[i]*100, c='green')
+                    # ax[1].plot(self.stalk_times[i], self.position_fits[i]*100, c='green')
             plt.tight_layout()
         # For verifying calibration coefficients
         elif not plain:
@@ -375,12 +375,12 @@ class LabStalkRow:
         axs[0, 0].plot(self.time, self.strain_1_raw, linewidth=0.3)
         axs[0, 0].plot(self.time, self.a1_drift, linewidth=0.3)
         axs[0, 0].plot(self.time, self.strain_1, label='A1')
-        axs[0, 0].axhline(self.strain_a1_ini, c='red', linewidth=0.5)
+        axs[0, 0].axhline(self.strain_1_ini, c='red', linewidth=0.5)
         axs[0, 0].legend()
         axs[0, 1].plot(self.time, self.strain_2_raw, linewidth=0.3)
         axs[0, 1].plot(self.time, self.a2_drift, linewidth=0.3)
         axs[0, 1].plot(self.time, self.strain_2, label='A2')
-        axs[0, 1].axhline(self.strain_a2_ini, c='red', linewidth=0.5)
+        axs[0, 1].axhline(self.strain_2_ini, c='red', linewidth=0.5)
         axs[0, 1].legend()
         axs[1, 0].plot(self.time, self.strain_b1_raw, linewidth=0.3)
         axs[1, 0].plot(self.time, self.b1_drift, linewidth=0.3)
@@ -1305,9 +1305,9 @@ if __name__ == "__main__":
     local_run_flag = True
     
     '''Batch run of same configuration'''
-    # for i in range(1, 1+1):
-    #     process_data(date='08_06', test_num=f'{i}', view=True, overwrite=True)
-    show_force_position(dates=['08_06'], test_nums=[1])
+    for i in range(1, 11+1):
+        process_data(date='07_11', test_num=f'{i}', view=True, overwrite=False)
+    # show_force_position(dates=['08_06'], test_nums=[1])
 
     # boxplot_data(rodney_config='Integrated Beam Prototype 1', date='07_03', plot_num=104)
     # boxplot_data(rodney_config='Integrated Beam Prototype 2', date='07_10', plot_num=105)
