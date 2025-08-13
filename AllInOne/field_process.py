@@ -501,6 +501,23 @@ def show_force_position(dates, test_nums):
                 test.plot_section_stiffnesses()
     plt.show()
 
+def show_accels(dates, test_nums):
+    for date in dates:
+        for test_num in test_nums:
+            test = FieldStalkSection(date=date, test_num=test_num)
+            if test.exist:
+                test.smooth_raw_data()
+                test.shift_initials(time_cutoff=1.0)
+                test.calc_force_position()
+                test.differentiate_force_position()
+                test.differentiate_force_position_DT()
+                test.find_stalk_interaction()
+                test.collect_stalks()
+                test.calc_section_stiffnesses()
+                test.plot_force_position(view_stalks=True)
+                test.plot_section_stiffnesses()
+ 
+    plt.show()
 
 if __name__ == '__main__':
-    show_force_position(dates=['08_07'], test_nums=range(21, 30+1))
+    show_force_position(dates=['08_13'], test_nums=[1])
