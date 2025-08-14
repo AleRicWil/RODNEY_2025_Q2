@@ -185,6 +185,9 @@ class FieldStalkSection:
             self.acX = self.acX_raw = data['AcX1'].to_numpy()   # CSV is set up to allow two accelerometers
             self.acY = self.acY_raw = data['AcY1'].to_numpy()
             self.acZ = self.acZ_raw = data['AcZ1'].to_numpy()
+            self.acX = self.acX_raw = self.acX_raw[mask]
+            self.acY = self.acY_raw = self.acY_raw[mask]
+            self.acZ = self.acZ_raw = self.acZ_raw[mask]
 
     def smooth_raw_data(self, strain_window=20, strain_order=1, accel_window=50, accel_order=1):
         self.strain_1 = savgol_filter(self.strain_1, strain_window, strain_order)
@@ -226,14 +229,17 @@ class FieldStalkSection:
             self.force = savgol_filter(self.force, window, order)
             self.position = savgol_filter(self.position, window, order)
 
-    def plot_force_position(self, view_stalks=False, plain=True):
+    def plot_force_position(self, view_stalks=False, plain=True, show_accels=False):
         try:
             time_ini = self.stalks[0].time_loc
             time_end = self.stalks[-1].time_loc
         except:
             time_ini = 0
             time_end = 10
-        fig, ax = plt.subplots(2, 1, sharex=True, figsize=(9.5, 4.8))
+        if show_accels:
+            fig, ax = plt.subplots(3, 1, sharex=True, figsize=(9.5, 4.8))
+        else:
+            fig, ax = plt.subplots(2, 1, sharex=True, figsize=(9.5, 4.8))
         ax[0].plot(self.time - time_ini, self.force, label='Force')
         ax[0].set_ylabel('Force (N)')
         ax[1].plot(self.time - time_ini, self.position*100, label='Position')
@@ -241,6 +247,11 @@ class FieldStalkSection:
         ax[1].plot(self.time - time_ini, self.position_raw*100, label='raw', linewidth=0.5)
         ax[1].set_xlabel('Time (s)')
         ax[1].set_ylabel('Position (cm)')
+        if show_accels:
+            ax[2].plot(self.time - time_ini, self.pitch_smooth, label='Pitch')
+            ax[2].plot(self.time - time_ini, self.roll_smooth, label='Roll')
+            # ax[2].plot(self.time - time_ini, self.acZ, label='Vertical')
+            ax[2].legend()
 
         plt.suptitle(f'{self.configuration}, Date:{self.date}, Test #{self.test_num}\nStalks:{self.stalk_type}')
         plt.xlim(-2, time_end - time_ini + 2)
@@ -483,7 +494,28 @@ class FieldStalkSection:
         plt.xlabel('Time after first stalk (s)')
         plt.ylabel('Flexural Stiffness (N/m^2)')
 
-def show_force_position(dates, test_nums):
+    def calc_angles(self):
+        cal_csv_path = r'AllInOne\accel_calibration_history.csv'
+        cal_data = pd.read_csv(cal_csv_path)
+        latest_cal = cal_data.iloc[-1]
+
+        self.m_x = latest_cal['Gain X']; self.b_x = latest_cal['Offset X']
+        self.m_y = latest_cal['Gain Y']; self.b_y = latest_cal['Offset Y']
+        self.m_z = latest_cal['Gain Z']; self.b_z = latest_cal['Offset Z']
+        
+        x_g = self.acX*self.m_x + self.b_x
+        y_g = self.acY*self.m_y + self.b_y
+        z_g = self.acZ*self.m_z + self.b_z
+        # Calculate angles (in radians) about global x and y axes
+        theta_x = np.arctan2(-y_g, np.sqrt(x_g**2 + z_g**2))  # Angle about global x-axis
+        theta_y = np.arctan2(x_g, np.sqrt(y_g**2 + z_g**2))  # Angle about global y-axis
+
+        self.pitch = np.degrees(theta_x)
+        self.roll = np.degrees(theta_y)
+        self.pitch_smooth = savgol_filter(self.pitch, 200, 2)
+        self.roll_smooth = savgol_filter(self.roll, 200, 2)
+
+def show_force_position(dates, test_nums, show_accels):
     for date in dates:
         for test_num in test_nums:
             test = FieldStalkSection(date=date, test_num=test_num)
@@ -496,28 +528,12 @@ def show_force_position(dates, test_nums):
                 test.find_stalk_interaction()
                 test.collect_stalks()
                 test.calc_section_stiffnesses()
-                test.plot_force_position(view_stalks=True)
-                test.plot_section_stiffnesses()
+                test.calc_angles()
+
+                test.plot_force_position(view_stalks=True, show_accels=show_accels)
                 test.plot_section_stiffnesses()
     plt.show()
 
-def show_accels(dates, test_nums):
-    for date in dates:
-        for test_num in test_nums:
-            test = FieldStalkSection(date=date, test_num=test_num)
-            if test.exist:
-                test.smooth_raw_data()
-                test.shift_initials(time_cutoff=1.0)
-                test.calc_force_position()
-                test.differentiate_force_position()
-                test.differentiate_force_position_DT()
-                test.find_stalk_interaction()
-                test.collect_stalks()
-                test.calc_section_stiffnesses()
-                test.plot_force_position(view_stalks=True)
-                test.plot_section_stiffnesses()
- 
-    plt.show()
 
 if __name__ == '__main__':
-    show_force_position(dates=['08_13'], test_nums=[1])
+    show_force_position(dates=['08_07'], test_nums=range(31, 40+1), show_accels=True)
