@@ -91,7 +91,7 @@ class RealTimePlotWindow(QtWidgets.QMainWindow):
             return
 
         try:
-            self.ser = serial.Serial(port, 230400, timeout=1)
+            self.ser = serial.Serial(port, 115200, timeout=1)
         except serial.SerialException as e:
             self.status_queue.put(f"Failed to connect to {port}: {str(e)}")
             return
@@ -216,9 +216,9 @@ class RealTimePlotWindow(QtWidgets.QMainWindow):
                 strain_2 = float(data[2]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)
                 strain_b1 =0# float(data[0]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)
                 strain_b2 =0# float(data[0]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)
-                acx1 = float(data[3])
-                acy1 = float(data[4])
-                acz1 = float(data[5])
+                acx1 =0# float(data[3])
+                acy1 =0# float(data[4])
+                acz1 =0# float(data[5])
             except (ValueError, IndexError):
                 self.status_queue.put("Cannot parse data")
                 return
@@ -300,7 +300,6 @@ class RealTimePlotWindow(QtWidgets.QMainWindow):
 
 def run_collection(port, config, status_queue):
     """Run the real-time plot window in a separate process.
-
     Args:
         port (str): Serial port for Arduino communication.
         config (dict): Configuration dictionary with test parameters.

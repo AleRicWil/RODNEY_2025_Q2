@@ -48,8 +48,8 @@ class LabStalkRow:
                     d_str = row[2]
                     k_values = [float(v) for v in k_str.split()]
                     d_values = [float(v) for v in d_str.split()]
-                    self.k_A1, self.k_B1, self.k_A2, self.k_B2 = k_values
-                    self.d_A1, self.d_B1, self.d_A2, self.d_B2 = d_values
+                    self.k_A1, self.k_B1, self.k_A2, self.k_A3 = k_values
+                    self.d_A1, self.d_B1, self.d_A2, self.d_A3 = d_values
                     param_rows += 1
                 if row[0] == "stalk array (lo med hi)":
                     self.stalk_type = row[1]
@@ -111,7 +111,7 @@ class LabStalkRow:
         self.strain_a1_ini = np.mean(self.strain_1[0:zero_cutoff])
         self.strain_b1_ini = np.mean(self.strain_[0:zero_cutoff])
         self.strain_a2_ini = np.mean(self.strain_2[0:zero_cutoff])
-        self.strain_b2_ini = np.mean(self.strain_3[0:zero_cutoff])
+        self.strain_a3_ini = np.mean(self.strain_3[0:zero_cutoff])
 
         strain_a1_end = np.mean(self.strain_1[-zero_cutoff:])
         strain_b1_end = np.mean(self.strain_[-zero_cutoff:])
@@ -121,17 +121,17 @@ class LabStalkRow:
         a1_drift_slope = (strain_a1_end - self.strain_a1_ini) / (t_end - t_start)
         b1_drift_slope = (strain_b1_end - self.strain_b1_ini) / (t_end - t_start)
         a2_drift_slope = (strain_a2_end - self.strain_a2_ini) / (t_end - t_start)
-        b2_drift_slope = (strain_b2_end - self.strain_b2_ini) / (t_end - t_start)
+        b2_drift_slope = (strain_b2_end - self.strain_a3_ini) / (t_end - t_start)
 
         self.a1_drift = a1_drift_slope * self.time + self.strain_a1_ini
         self.b1_drift = b1_drift_slope * self.time + self.strain_b1_ini
         self.a2_drift = a2_drift_slope * self.time + self.strain_a2_ini
-        self.b2_drift = b2_drift_slope * self.time + self.strain_b2_ini
+        self.b2_drift = b2_drift_slope * self.time + self.strain_a3_ini
 
         corrected_a1 = self.strain_1 - (self.a1_drift - self.strain_a1_ini)
         corrected_b1 = self.strain_ - (self.b1_drift - self.strain_b1_ini)
         corrected_a2 = self.strain_2 - (self.a2_drift - self.strain_a2_ini)
-        corrected_b2 = self.strain_3 - (self.b2_drift - self.strain_b2_ini)
+        corrected_b2 = self.strain_3 - (self.b2_drift - self.strain_a3_ini)
 
         self.strain_1 = corrected_a1
         self.strain_ = corrected_b1
@@ -144,25 +144,35 @@ class LabStalkRow:
         self.strain_a1_ini = np.mean(self.strain_1[0:zero_cutoff])
         self.strain_b1_ini = np.mean(self.strain_[0:zero_cutoff])
         self.strain_a2_ini = np.mean(self.strain_2[0:zero_cutoff])
-        self.strain_b2_ini = np.mean(self.strain_3[0:zero_cutoff])
+        self.strain_a3_ini = np.mean(self.strain_3[0:zero_cutoff])
 
         self.c_A1 = self.strain_a1_ini
         self.c_B1 = self.strain_b1_ini
         self.c_A2 = self.strain_a2_ini
-        self.c_B2 = self.strain_b2_ini
+        self.c_A3 = self.strain_a3_ini
 
-    def calculate_force_position(self, smooth=True, window=100, order=2, small_den_cutoff=0.000035):
+    def calc_force_position(self, smooth=True, window=100, order=2, small_den_cutoff=0.000035):
         self.force_num = self.k_A2 * (self.strain_1 - self.c_A1) - self.k_A1 * (self.strain_2 - self.c_A2)
         self.force_den = self.k_A1 * self.k_A2 * (self.d_A2 - self.d_A1)
         self.force = self.force_num / self.force_den
+
+        self.force_num = self.k_A3 * (self.strain_1 - self.c_A1) - self.k_A1 * (self.strain_3 - self.c_A3)
+        self.force_den = self.k_A1 * self.k_A3 * (self.d_A3 - self.d_A1)
+        self.force_alt = self.force_num / self.force_den
         
         self.pos_num = self.k_A2 * self.d_A2 * (self.strain_1 - self.c_A1) - self.k_A1 * self.d_A1 * (self.strain_2 - self.c_A2)
         self.pos_den = self.k_A2 * (self.strain_1 - self.c_A1) - self.k_A1 * (self.strain_2 - self.c_A2)
         self.position = np.where(np.abs(self.pos_den) < small_den_cutoff, 0, self.pos_num / self.pos_den)
+
+        self.pos_num = self.k_A3 * self.d_A3 * (self.strain_1 - self.c_A1) - self.k_A1 * self.d_A1 * (self.strain_3 - self.c_A3)
+        self.pos_den = self.k_A3 * (self.strain_1 - self.c_A1) - self.k_A1 * (self.strain_3 - self.c_A3)
+        self.position_alt = np.where(np.abs(self.pos_den) < small_den_cutoff, 0, self.pos_num / self.pos_den)
         
         if smooth:
-            self.force = savgol_filter(self.force, window, order)
-            self.position = savgol_filter(self.position, window, order)
+            self.force_smooth = savgol_filter(self.force, window, order)
+            self.position_smooth = savgol_filter(self.position, window, order)
+            self.force_alt_smooth = savgol_filter(self.force_alt, window, order)
+            self.position_alt_smooth = savgol_filter(self.position_alt, window, order)
 
     def differentiate_force_position(self, smooth=True, window=100, order=2):
         self.forceDT = np.gradient(self.force, self.time)
@@ -292,15 +302,15 @@ class LabStalkRow:
             
     def plot_force_position(self, view_stalks=False, plain=True):
         fig, ax = plt.subplots(2, 1, sharex=True, figsize=(9.5, 4.8))
-        ax[0].plot(self.time, self.force, label='Force')
-        # if hasattr(self, 'near_zero_accel_indices'):
-        #     ax[0].plot(self.time[self.interaction_indices], self.force[self.interaction_indices], 'ro', markersize=2, label='Near-zero accel')
+        ax[0].plot(self.time, self.force_alt_smooth, label='1-3')
+        ax[0].plot(self.time, self.force_smooth, linewidth=0.5, label='1-2')
+        # ax[0].plot(self.time, self.force, linewidth=0.3)
         ax[0].set_ylabel('Force (N)')
         # ax[0].legend()
         
-        ax[1].plot(self.time, self.position*100, label='Position')
-        # if hasattr(self, 'near_zero_accel_indices'):
-        #     ax[1].plot(self.time[self.interaction_indices], self.position[self.interaction_indices]*100, 'ro', markersize=2, label='Near-zero accel')
+        ax[1].plot(self.time, self.position_alt_smooth*100, label='1-3')
+        ax[1].plot(self.time, self.position_smooth*100, linewidth=0.5, label='1-2')
+        # ax[1].plot(self.time, self.position*100, linewidth=0.3)
         ax[1].set_xlabel('Time (s)')
         ax[1].set_ylabel('Position (cm)')
         plt.suptitle(f'{self.configuration}, Date:{self.date}, Test #{self.test_num}\nStalks:{self.stalk_type}')
@@ -317,11 +327,13 @@ class LabStalkRow:
         # For verifying calibration coefficients
         elif not plain:
             g = 9.8
-            ax[0].axhline(1*g, c='red', linewidth=0.5)
-            ax[0].axhline(0.5*g, c='red', linewidth=0.5)
+            ax[0].axhline(0.1*g, c='red', linewidth=0.5)
             ax[0].axhline(0.2*g, c='red', linewidth=0.5)
-            ax[1].axhline(15, c='red', linewidth=0.5)
-            ax[1].axhline(10, c='red', linewidth=0.5)
+            ax[0].axhline(0.3*g, c='red', linewidth=0.5)
+            ax[0].axhline(0.4*g, c='red', linewidth=0.5)
+            ax[0].axhline(0.5*g, c='red', linewidth=0.5)
+            ax[1].axhline(30, c='red', linewidth=0.5)
+
 
 
     def plot_force_position_DT(self):
@@ -368,8 +380,8 @@ class LabStalkRow:
         axs[1, 0].legend()
         axs[1, 1].plot(self.time, self.strain_3_raw, linewidth=0.3)
         axs[1, 1].plot(self.time, self.b2_drift, linewidth=0.3)
-        axs[1, 1].plot(self.time, self.strain_3, label='B2')
-        axs[1, 1].axhline(self.strain_b2_ini, c='red', linewidth=0.5)
+        axs[1, 1].plot(self.time, self.strain_3, label='A3')
+        axs[1, 1].axhline(self.strain_a3_ini, c='red', linewidth=0.5)
         axs[1, 1].legend()
         plt.tight_layout()
 
@@ -477,6 +489,22 @@ class LabStalkRow:
         self.stalk_times = None
         self.force_fits = None
         self.position_fits = None
+
+    def save_force_position(self):
+        filename = r'Results_DOGBONE\paper_plots_data.csv'
+        time = self.time
+        force12 = self.force_smooth
+        force13 = self.force_alt_smooth
+        position12 = self.position_smooth
+        position13 = self.position_alt_smooth
+
+        headers = ['Time', 'Force_12', 'Force_13', 'Position_12', 'Position_13']
+
+        with open(filename, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(headers)
+            for t, f12, f13, p12, p13 in zip(time, force12, force13, position12, position13):
+                writer.writerow([t, f12, f13, p12, p13])
 
 def boxplot_data(rodney_config, date=None, stalk_type=None, plot_num=20):
     results_df = pd.read_csv(r'Results\results.csv')
@@ -646,7 +674,7 @@ def process_data(date, test_num, view=False, overwrite=False):
     test.smooth_strains(window=100)
     test.correct_linear_drift()
     test.shift_initials()
-    test.calculate_force_position(smooth=True, small_den_cutoff=0.00006)
+    test.calc_force_position(smooth=True, small_den_cutoff=0.00006)
     test.differentiate_force_position(smooth=True, window=100)
     test.differentiate_force_position_DT(smooth=True, window=100)
     test.find_stalk_interaction()
@@ -695,7 +723,7 @@ def optimize_parameters(dates, rodney_config):
             test.smooth_strains(window=100)
             test.correct_linear_drift()
             test.shift_initials()
-            test.calculate_force_position(smooth=True, small_den_cutoff=0.00006)
+            test.calc_force_position(smooth=True, small_den_cutoff=0.00006)
             test.differentiate_force_position(smooth=True, window=10)
             test.differentiate_force_position_DT(smooth=True, window=100)
             self.time = test.time
@@ -862,12 +890,16 @@ def show_force_position(dates, test_nums, stalk_id=None, rodney_config=None):
                        lo_force_accel_tol=params['lo_force_accel_tol'],
                        med_force_accel_tol=params['med_force_accel_tol'],
                        hi_force_accel_tol=params['hi_force_accel_tol'])
-            test.smooth_strains(window=100)
+            test.smooth_strains(window=40, order=1)
             test.correct_linear_drift()
             test.shift_initials()
-            test.calculate_force_position(smooth=True, small_den_cutoff=0.000006)
-            test.plot_force_position(view_stalks=False, plain=True)
+            test.calc_force_position(smooth=True, small_den_cutoff=0.000006, window=40, order=1)
+            test.plot_force_position(view_stalks=False, plain=False)
+            test.plot_raw_strain()
+            test.save_force_position()
     plt.show()
+
+
 
 
 if __name__ == "__main__":
@@ -876,7 +908,7 @@ if __name__ == "__main__":
     '''Batch run of same configuration'''
     # for i in range(101, 145+1):
     #     process_data(date='07_16', test_num=f'{i}', view=True, overwrite=True)
-    show_force_position(dates=['01_01'], test_nums=range(1, 1+1))
+    show_force_position(dates=['08_13'], test_nums=range(2, 2+1))
 
     # boxplot_data(rodney_config='Integrated Beam Prototype 1', date='07_03', plot_num=104)
     # boxplot_data(rodney_config='Integrated Beam Prototype 2', date='07_10', plot_num=105)

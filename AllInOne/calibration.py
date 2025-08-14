@@ -32,7 +32,7 @@ def run_calibration(port, config, status_queue):
     for mass in masses:
         for position in positions:
             try:
-                ser = serial.Serial(port, 230400, timeout=1)
+                ser = serial.Serial(port, 115200, timeout=1)
             except serial.SerialException as e:
                 status_queue.put(f"Failed to connect to {port}: {str(e)}")
                 return
@@ -93,11 +93,14 @@ def run_calibration(port, config, status_queue):
                             continue
 
                         try:
-                            time_sec = float(data[0]) * 10**-6
-                            strain_a1 = float(data[1]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)
-                            strain_b1 = float(data[2]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)
-                            strain_a2 = float(data[3]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)
-                            strain_b2 = float(data[4]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)
+                            time_sec = float(data[0]) * 1e-6
+                            strain_1 = float(data[1]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)
+                            strain_2 = float(data[2]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)
+                            strain_b1 = float(data[1]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)
+                            strain_b2 = float(data[2]) * SUPPLY_VOLTAGE / (RESOLUTION * GAIN)
+                            acx1 = float(data[3])
+                            acy1 = float(data[4])
+                            acz1 = float(data[5])
                         except (ValueError, IndexError):
                             status_queue.put("Invalid data received: cannot parse values")
                             continue
@@ -107,12 +110,12 @@ def run_calibration(port, config, status_queue):
                             time_offset_check = False
 
                         time_sec -= time_offset
-                        csvwriter.writerow([time_sec, strain_a1, strain_b1, strain_a2, strain_b2, current_time])
+                        csvwriter.writerow([time_sec, strain_1, strain_b1, strain_2, strain_b2, current_time])
                         csvfile.flush()
 
-                        strains['a1'].append(strain_a1)
+                        strains['a1'].append(strain_1)
                         strains['b1'].append(strain_b1)
-                        strains['a2'].append(strain_a2)
+                        strains['a2'].append(strain_2)
                         strains['b2'].append(strain_b2)
 
                         status_queue.put(f"Press 'space' to end data collection for mass {mass}g at {position}cm")
@@ -172,11 +175,11 @@ def calculate_coefficients(calibration_data, cal_status_var):
             try:
                 mass = float(row[0])
                 position = float(row[1])
-                strain_a1 = float(row[3])   #2
+                strain_1 = float(row[2])   #2
                 strain_b1 = float(row[3])   #3
-                strain_a2 = float(row[5])   #4
+                strain_2 = float(row[4])   #4
                 strain_b2 = float(row[5])   #5
-                valid_data.append((mass, position, strain_a1, strain_b1, strain_a2, strain_b2))
+                valid_data.append((mass, position, strain_1, strain_b1, strain_2, strain_b2))
             except ValueError:
                 continue
 
@@ -352,7 +355,7 @@ def run_accel_calibration(port, config, status_queue):
 
         for orientation in orientations:
             try:
-                ser = serial.Serial(port, 230400, timeout=1)
+                ser = serial.Serial(port, 115200, timeout=1)
             except serial.SerialException as e:
                 status_queue.put(f"Failed to connect to {port}: {str(e)}")
                 return

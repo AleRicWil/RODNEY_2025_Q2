@@ -303,81 +303,6 @@ class FieldStalkSection:
             self.force_DDT = savgol_filter(self.force_DDT, window, order)
             self.position_DDT = savgol_filter(self.position_DDT, window, order)
 
-    # def find_stalk_interaction(self):
-    #     # Combine conditions into a single boolean mask
-    #     mask = (np.abs(self.position_DDT) < self.pos_accel_tol) & \
-    #         (self.position > self.min_position) & \
-    #         (self.position < self.max_position) & \
-    #         (self.position_DT < self.max_pos_rate) & \
-    #         (self.force > self.min_force) & \
-    #         (self.force_DT < self.max_force_rate) & \
-    #         (self.force_DT > self.min_force_rate) & \
-    #         (np.abs(self.force_DDT) < self.force_accel_tol)
-        
-    #     # Get initial interaction indices
-    #     interaction_indices = np.where(mask)[0]
-
-    #     # Filter out blips (groups with fewer than min_sequential indices)
-    #     if len(interaction_indices) > 0:
-    #         diffs = np.diff(interaction_indices)
-    #         group_starts = np.where(diffs > 1)[0] + 1
-    #         groups = np.split(interaction_indices, group_starts)
-    #         interaction_indices = np.concatenate([g for g in groups if len(g) >= self.min_seq_points]) if groups else np.array([])
-        
-    #     # Reconnect gaps < 30% of average gap
-    #     new_indices = []
-    #     for i in range(len(interaction_indices) - 1):
-    #         new_indices.append(interaction_indices[i])
-    #         gap = interaction_indices[i + 1] - interaction_indices[i]
-    #         if gap > 1 and gap < self.stitch_gap_limit and abs(self.force[interaction_indices[i+1]] - self.force[interaction_indices[i]]) < 2:
-    #             new_indices.extend(range(interaction_indices[i] + 1, interaction_indices[i + 1]))
-    #     new_indices.append(interaction_indices[-1])
-    #     interaction_indices = np.array(new_indices, dtype=np.int64)
-
-    #     # Assign results
-    #     self.interaction_indices = interaction_indices
-    #     self.stalk_force = self.force[interaction_indices]
-    #     self.stalk_position = self.position[interaction_indices]
-    #     self.stalk_time = self.time[interaction_indices]
-
-    # def collect_stalk_sections(self):
-    #     gaps = np.concatenate(([0], np.diff(self.interaction_indices)))
-    #     big_gaps = gaps[gaps>1]
-    #     avg_gap = np.average(big_gaps)
-
-    #     self.stalk_forces = []
-    #     self.stalk_positions = []
-    #     self.stalk_times = []
-    #     stalk_force_section = []
-    #     stalk_position_section = []
-    #     stalk_time_section = []
-        
-    #     for i in range(len(self.interaction_indices)):
-    #         if gaps[i] <= 1:    # accumulate point on current stalk
-    #             stalk_force_section.append(self.stalk_force[i])
-    #             stalk_position_section.append(self.stalk_position[i])
-    #             stalk_time_section.append(self.stalk_time[i])
-    #         else:               # store current stalk and reset accumulation
-    #             if stalk_force_section[0] < stalk_force_section[-1] and stalk_position_section[0] > stalk_position_section[-1] and \
-    #                 stalk_time_section[-1] - stalk_time_section[0] >= 0.5 and \
-    #                     max(stalk_position_section)*0.95 <= stalk_position_section[0]:
-    #                 self.stalk_forces.append(np.array(stalk_force_section))
-    #                 self.stalk_positions.append(np.array(stalk_position_section))
-    #                 self.stalk_times.append(np.array(stalk_time_section))
-    #             stalk_force_section = []
-    #             stalk_position_section = []
-    #             stalk_time_section = []
-                
-    #             if gaps[i] >= avg_gap*1.6:  # if the gap is very large, skip next stalk number
-    #                 self.stalk_forces.append(np.nan)
-    #                 self.stalk_positions.append(np.nan)
-    #                 self.stalk_times.append(np.nan)
-        
-    #     # add the last stalk
-    #     self.stalk_forces.append(np.array(stalk_force_section))
-    #     self.stalk_positions.append(np.array(stalk_position_section))
-    #     self.stalk_times.append(np.array(stalk_time_section))
-
     def find_stalk_interaction(self):
         mask = (self.force > self.min_force) & \
             (self.position > self.min_position) & \
@@ -503,17 +428,40 @@ class FieldStalkSection:
         self.m_y = latest_cal['Gain Y']; self.b_y = latest_cal['Offset Y']
         self.m_z = latest_cal['Gain Z']; self.b_z = latest_cal['Offset Z']
         
-        x_g = self.acX*self.m_x + self.b_x
-        y_g = self.acY*self.m_y + self.b_y
-        z_g = self.acZ*self.m_z + self.b_z
+        self.x_g = self.acX*self.m_x + self.b_x
+        self.y_g = self.acY*self.m_y + self.b_y
+        self.z_g = self.acZ*self.m_z + self.b_z
+
         # Calculate angles (in radians) about global x and y axes
-        theta_x = np.arctan2(-y_g, np.sqrt(x_g**2 + z_g**2))  # Angle about global x-axis
-        theta_y = np.arctan2(x_g, np.sqrt(y_g**2 + z_g**2))  # Angle about global y-axis
+        theta_x = np.arctan2(-self.y_g, np.sqrt(self.x_g**2 + self.z_g**2))  # Angle about global x-axis
+        theta_y = np.arctan2(self.x_g, np.sqrt(self.y_g**2 + self.z_g**2))  # Angle about global y-axis
+
 
         self.pitch = np.degrees(theta_x)
         self.roll = np.degrees(theta_y)
-        self.pitch_smooth = savgol_filter(self.pitch, 200, 2)
-        self.roll_smooth = savgol_filter(self.roll, 200, 2)
+        self.pitch_smooth = savgol_filter(self.pitch, 100, 2)
+        self.roll_smooth = savgol_filter(self.roll, 100, 2)
+
+    def plot_accels(self):
+        fig, ax = plt.subplots(2, 1, sharex=True, figsize=(9.5, 6))
+
+        ax[0].plot(self.time, self.pitch_smooth, label='Pitch')
+        ax[0].plot(self.time, self.roll_smooth, label='Roll')
+        ax[1].plot(self.time, self.z_g, label='Vertical')
+        ax[0].legend()
+
+        ax[0].axhline(0, c='red', linewidth=0.3)
+        ax[0].axhline(10, c='red', linewidth=0.3)
+        ax[0].axhline(15.1, c='red', linewidth=0.3)
+        ax[0].axhline(30.25, c='red', linewidth=0.3)
+        ax[0].axhline(-10, c='red', linewidth=0.3)
+        ax[0].axhline(-15.1, c='red', linewidth=0.3)
+        ax[0].axhline(-30.25, c='red', linewidth=0.3)
+
+        ax[1].axhline(1, c='red', linewidth=0.3)
+        ax[1].axhline(0, c='red', linewidth=0.3)
+        ax[1].axhline(-1, c='red', linewidth=0.3)
+
 
 def show_force_position(dates, test_nums, show_accels):
     for date in dates:
@@ -534,6 +482,16 @@ def show_force_position(dates, test_nums, show_accels):
                 test.plot_section_stiffnesses()
     plt.show()
 
+def show_accels(dates, test_nums):
+    for date in dates:
+        for test_num in test_nums:
+            test = FieldStalkSection(date=date, test_num=test_num)
+            if test.exist:
+                test.smooth_raw_data()
+                test.calc_angles()
+                test.plot_accels()
+    plt.show()
 
 if __name__ == '__main__':
-    show_force_position(dates=['08_07'], test_nums=range(31, 40+1), show_accels=True)
+    # show_force_position(dates=['08_07'], test_nums=range(31, 40+1), show_accels=True)
+    show_accels(dates=['08_13'], test_nums=[3])

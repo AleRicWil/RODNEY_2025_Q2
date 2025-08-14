@@ -72,7 +72,7 @@ void readAccel(int mpu, int16_t &x, int16_t &y, int16_t &z) {
 }
 
 void setup() {
-  Serial.begin(230400);
+  Serial.begin(115200);
   Wire.setClock(400000);
   Wire.begin();
   pinMode(BUTTON_PIN, INPUT_PULLUP);
@@ -101,7 +101,7 @@ void loop() {
   pca9546a_select(3);
   diff3 = ads4.getLastConversionResults();
 
-  readAccel(MPU1, AcX1, AcY1, AcZ1);
+  // readAccel(MPU1, AcX1, AcY1, AcZ1);
   // readAccel(MPU2, AcX2, AcY2, AcZ2);
 
   if (digitalRead(BUTTON_PIN) == LOW && !data_collection_active) {
@@ -131,10 +131,10 @@ void loop() {
   Serial.print(diff0); Serial.print(",");
   // Serial.print(diff1); Serial.print(",");
   // Serial.print(diff2); Serial.print(",");
-  Serial.print(diff3); Serial.print(",");
-  Serial.print(AcX1); Serial.print(",");
-  Serial.print(AcY1); Serial.print(",");
-  Serial.println(AcZ1); //Serial.print(",");
+  Serial.println(diff3); //Serial.print(",");
+  //Serial.print(AcX1); Serial.print(",");
+  //Serial.print(AcY1); Serial.print(",");
+  //Serial.println(AcZ1); //Serial.print(",");
   // Serial.print(AcX2); Serial.print(",");
   // Serial.print(AcY2);  Serial.print(",");
   // Serial.println(AcZ2);
