@@ -101,11 +101,9 @@ class StalkInteraction:
         self.slope_f, self.intercept_f, self.r_f, _, _ = stats.linregress(self.time, self.force)
         self.slope_p, self.intercept_p, self.r_p, _, _ = stats.linregress(self.time, self.position)
         
-        
-        
         count = self.filter_data(self.time, self.force, self.position, self.pos_x, self.force_D_pos_x)
         self.clean_FX_data()
-        # self.plot_filtered_data(count)
+        self.plot_filtered_data(count)
         
         self.fits['time'] = self.time_filt
         self.fits['force'] = np.polyval([self.slope_f, self.intercept_f], self.time_filt)

@@ -503,4 +503,4 @@ def show_force_position(dates, test_nums):
 
 
 if __name__ == '__main__':
-    show_force_position(dates=['08_07'], test_nums=range(41, 50+1))
+    show_force_position(dates=['08_13'], test_nums=range(1, 15+1))
