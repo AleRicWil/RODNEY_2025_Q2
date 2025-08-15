@@ -25,172 +25,77 @@ class StalkInteraction:
         self.height = section.height
         self.yaw = section.yaw
 
-        # Force vs deflection
-        self.pos_x = (section.max_position - self.position)*np.sin(self.yaw)
+    def calc_stalk_stiffness(self):
+        # Fit linear regression to force and position vs time
+        time = self.time
+        force = self.force
+        position = self.position
+        slope_f, intercept_f, r_f, _, _ = stats.linregress(time, force)
+        slope_p, intercept_p, r_p, _, _ = stats.linregress(time, position)
+        print(f'R^2: {r_f**2}, {r_p**2}')
 
-    def filter_data(self, time, force, position, pos_x, force_D_pos_x):
         count = 0
         prev_len = len(time)
-        self.time_filt = time
-        self.force_filt = force
-        self.position_filt = position
-        self.pos_x_filt = pos_x
-        self.force_D_pos_x_filt = force_D_pos_x
-        
-        while self.p90_FDX - self.p10_FDX > 700 or self.p10_FDX < 30 or max(self.force_D_pos_x_filt) - self.p90_FDX > 700:
-            if len(self.time_filt) <= 100:
-                break
+        while r_f**2 < 0.85 or r_p**2 < 0.85 and len(time) > 30 and count < 10:
             count += 1
-            mask = (self.force_D_pos_x_filt < self.p90_FDX) & (self.force_D_pos_x_filt > self.p10_FDX)
-            self.force_filt = self.force_filt[mask]
-            self.position_filt = self.position_filt[mask]
-            self.pos_x_filt = self.pos_x_filt[mask]
-            self.force_D_pos_x_filt = self.force_D_pos_x_filt[mask]
-            self.time_filt = self.time_filt[mask]
-            
-            self.slope_f, self.intercept_f, self.r_f, _, _ = stats.linregress(self.time_filt, self.force_filt)
-            self.slope_p, self.intercept_p, self.r_p, _, _ = stats.linregress(self.time_filt, self.position_filt)
-            self.slope_fx, self.intercept_fx, self.r_fx, _, _ = stats.linregress(self.pos_x_filt, self.force_filt)
-            self.p10_FDX, self.p90_FDX = np.percentile(self.force_D_pos_x_filt, [10, 90])
-            self.avg_FDX = np.mean(self.force_D_pos_x_filt)
-            
-        return count
-
-    def plot_filtered_data(self, count):
-        fit_f = np.polyval([self.slope_f, self.intercept_f], self.time_filt)
-        fit_p = np.polyval([self.slope_p, self.intercept_p], self.time_filt)
-        fit_fx = np.polyval([self.slope_fx, self.intercept_fx], self.pos_x_filt)
-        
-        print(f'Ending iterative fit with {len(self.time_filt)} points\nR^2: {self.r_f**2}, {self.r_p**2}')
-        fig, ax = plt.subplots(2, 2, sharex=False, figsize=(10,10))
-        ax[0,0].scatter(self.time_filt, self.force_filt, s=5)
-        ax[0,0].plot(self.time_filt, fit_f, c='orange')
-        ax[0,0].set_ylim(0, 60)
-        ax[0,0].set_ylabel('Force (N)')
-
-        ax[1,0].scatter(self.time_filt, self.position_filt, s=5)
-        ax[1,0].plot(self.time_filt, fit_p, c='orange')
-        ax[1,0].set_ylim(0, 0.20)
-        ax[1,0].set_ylabel('Position (m)')
-        ax[1,0].set_xlabel('Time (s)')
-
-        ax[0,1].plot(self.pos_x, self.force, linewidth=0.5, c='red')
-        ax[0,1].scatter(self.pos_x_filt, self.force_filt, s=5)
-        ax[0,1].plot(self.pos_x_filt, fit_fx, c='orange')
-        for group in self.force_clean_groups:
-            pos_x = [point['x'] for point in group['points']]
-            force = [point['y'] for point in group['points']]
-            ax[0,1].scatter(pos_x, force)
-        ax[0,1].set_xlim(0, 0.05)
-
-        ax[1,1].plot(self.pos_x, self.force_D_pos_x, linewidth=0.5, c='red')
-        ax[1,1].set_ylim(min(self.force_D_pos_x_filt)*0.9, max(self.force_D_pos_x_filt)*1.1)
-        ax[1,1].set_xlim(0, 0.05)
-        ax[1,1].scatter(self.pos_x_filt, self.force_D_pos_x_filt, s=5)
-        ax[1,1].axhline(self.avg_FDX, linewidth=0.5, c='green')
-        ax[1,1].axhline(self.p10_FDX, linewidth=0.5, c='blue')
-        ax[1,1].axhline(self.p90_FDX, linewidth=0.5, c='red')
-        plt.suptitle(f'{len(self.time_filt)} of {len(self.time)} points. Filtered {count} times\nSlope_FX: {self.slope_fx:.1f}, Avg_FDX: {self.avg_FDX:.1f}\nf/p: {-self.slope_f/self.slope_p/np.sin(self.yaw):.1f}, R_fx^2: {self.r_fx**2:.3f}')
-        plt.show()
-
-    def calc_stalk_stiffness(self):
-        self.force_D_pos_x = np.gradient(self.force, self.pos_x)
-        self.p10_FDX, self.p90_FDX = np.percentile(self.force_D_pos_x, [10, 90])
-        self.avg_FDX = np.mean(self.force_D_pos_x)
-        self.slope_fx, self.intercept_fx, self.r_fx, _, _ = stats.linregress(self.pos_x, self.force)
-        self.slope_f, self.intercept_f, self.r_f, _, _ = stats.linregress(self.time, self.force)
-        self.slope_p, self.intercept_p, self.r_p, _, _ = stats.linregress(self.time, self.position)
-        
-        
-        
-        count = self.filter_data(self.time, self.force, self.position, self.pos_x, self.force_D_pos_x)
-        self.clean_FX_data()
-        # self.plot_filtered_data(count)
-        
-        self.fits['time'] = self.time_filt
-        self.fits['force'] = np.polyval([self.slope_f, self.intercept_f], self.time_filt)
-        self.fits['position'] = np.polyval([self.slope_p, self.intercept_p], self.time_filt)
-        self.time_loc = (self.time_filt[0] + self.time_filt[-1]) / 2
-        self.stiffness = (self.slope_fx * self.height**3) / 3
-
-    def clean_FX_data(self):
-        # reassign self arrays for function use
-        t = self.time_filt
-        x = self.pos_x_filt
-        y = self.force_filt
-        s = self.position_filt
-        dydx = self.force_D_pos_x_filt
-
-        # Keep indices where x is strictly decreasing over reverse time
-        keep_indices = [len(x) - 1]
-        for i in range(len(x) - 2, -1, -1):
-            if x[i] < x[keep_indices[-1]]:
-                keep_indices.append(i)
-        
-        keep_indices.reverse()
-        t = [t[i] for i in keep_indices]
-        x = [x[i] for i in keep_indices]
-        y = [y[i] for i in keep_indices]
-        dydx = [dydx[i] for i in keep_indices]
-        s = [s[i] for i in keep_indices]
-
-        # Group points into increasing force segments
-        y_min, y_max = np.min(y), np.max(y)
-        y_span = y_max - y_min
-        y_gaps = np.diff(y, append=0)
-        y_groups = []
-        y_vals = []; x_vals = []; t_vals = []; dydx_vals = []; s_vals = []
-        current_segment = []
-        threshold = y_span * 0.15
-
-        for gap, x_val, y_val, t_val, dydx_val, s_val in zip(y_gaps, x, y, t, dydx, s):
-            point = {'x': x_val, 'y': y_val, 't': t_val, 'dydx': dydx_val, 's': s_val}
-            if gap < threshold:
-                current_segment.append(point)
-                x_vals.append(x_val); y_vals.append(y_val); t_vals.append(t_val); dydx_vals.append(dydx_val); s_vals.append(s_val)
+            if prev_len <= len(time) and count > 1:
+                ipr_scale = 1.0
             else:
-                if current_segment:
-                    current_segment.append(point)
-                    x_vals.append(x_val); y_vals.append(y_val); t_vals.append(t_val); dydx_vals.append(dydx_val); s_vals.append(s_val)
-                    y_groups.append({'points': current_segment, 'avg_force': np.mean(y_vals), 'avg_x': np.mean(x_vals), 
-                                     'avg_t': np.mean(t_vals), 't_span': t_vals[-1] - t_vals[0], 'avg_dydx': np.mean(dydx_vals),  'num_points': len(y_vals)})
-                current_segment = []
-                y_vals = []
-                x_vals = []
-        if current_segment:
-            current_segment.append(point)  # Include last point
-            x_vals.append(x_val); y_vals.append(y_val); t_vals.append(t_val); dydx_vals.append(dydx_val); s_vals.append(s_val)
-            y_groups.append({'points': current_segment, 'avg_force': np.mean(y_vals), 'avg_x': np.mean(x_vals), 
-                             'avg_t': np.mean(t_vals),  't_span': t_vals[-1] - t_vals[0], 'avg_dydx': np.mean(dydx_vals), 'num_points': len(y_vals)})
+                ipr_scale = 3.0
+            # print(f'Starting iterative fit with {len(time)} points\nR^2: {r_f**2}, {r_p**2}')
+            fit_f = np.polyval([slope_f, intercept_f], time)
+            fit_p = np.polyval([slope_p, intercept_p], time)
+            # plt.plot(time, force)
+            # plt.plot(time, fit_f)
+            # plt.ylim(0,60)
+            # plt.figure()
+            # plt.plot(time, position)
+            # plt.plot(time, fit_p)
+            # plt.ylim(0.05, 0.20)
+            # plt.show()
+            
+            residuals_f = np.abs(force - fit_f)
+            residuals_p = np.abs(position - fit_p)
+            
+            p05_f, p95_f = np.percentile(residuals_f, [5, 95])
+            ipr_f = p95_f - p05_f
+            # print(ipr_scale)
+            threshold_f = ipr_scale * (1 - r_f**2) * ipr_f
+            
+            # p1_p, p9_p = np.percentile(residuals_p, [10, 90])
+            # ipr_p = p9_p - p1_p
+            # threshold_p = 1.0 * (1 - r_p**2) * ipr_p
+            
+            mask = (residuals_f <= threshold_f)# & (residuals_p <= threshold_p)
+            
+            force = force[mask]
+            position = position[mask]
+            prev_len = len(time)
+            time = time[mask]
+            slope_f, intercept_f, r_f, _, _ = stats.linregress(time, force)
+            slope_p, intercept_p, r_p, _, _ = stats.linregress(time, position)
+
+        fit_f = np.polyval([slope_f, intercept_f], time)
+        fit_p = np.polyval([slope_p, intercept_p], time)
+        # print(f'Ending iterative fit with {len(time)} points\nR^2: {r_f**2}, {r_p**2}')
+        # plt.plot(time, force)
+        # plt.plot(time, fit_f)
+        # plt.ylim(0,60)
+        # plt.figure()
+        # plt.plot(time, position)
+        # plt.plot(time, fit_p)
+        # plt.ylim(0.05, 0.20)
+        # plt.show()
         
-        # remove bad initial sections where stalk weakly touches sensor
-        if len(y_groups) == 2 and \
-            y_groups[1]['avg_force'] - y_groups[0]['avg_force'] > y_span*0.6 and \
-            y_groups[1]['num_points'] > y_groups[0]['num_points']*1.2 and \
-            y_groups[1]['t_span'] > y_groups[0]['t_span']*2.0 and \
-            y_groups[0]['t_span'] < 0.4 and \
-            abs(y_groups[0]['avg_dydx'] - y_groups[1]['avg_dydx']) > 5:
-            del y_groups[0]
+        # Create line to visualize on plots
+        self.fits['time'] = time
+        self.fits['force'] = np.polyval([slope_f, intercept_f], self.time)
+        self.fits['position'] = np.polyval([slope_p, intercept_p], self.time)
 
-        # Write all points in y_groups to t, x, y, dydx, s
-        t = []; x = []; y = []; dydx = []; s = []
-        for group in y_groups:
-            for point in group['points']:
-                t.append(point['t']); x.append(point['x']); y.append(point['y']); dydx.append(point['dydx']); s.append(point['s'])
-
-
-        # Update self arrays
-        self.time_clean = t
-        self.pos_x_clean = x
-        self.force_clean = y
-        self.force_D_pos_x_clean = dydx
-        self.position_clean = s
-        self.force_clean_groups = y_groups
-
-        self.slope_fx, self.intercept_fx, self.r_fx, _, _ = stats.linregress(self.pos_x_clean, self.force_clean)
-        self.slope_f, self.intercept_f, self.r_f, _, _ = stats.linregress(self.time_clean, self.force_clean)
-        self.slope_p, self.intercept_p, self.r_p, _, _ = stats.linregress(self.time_clean, self.position_clean)
-
+        # Calulate fluxual stiffness from slopes and system parameters
+        num = slope_f*self.height**3
+        den = -3*slope_p*np.sin(self.yaw) # negate because position starts at end of sensor beam (15cm) and ends at base (5cm)
+        self.stiffness = num/den
 
 class FieldStalkSection:
     def __init__(self, date, test_num, min_force_rate=-0.5, pos_accel_tol=0.8, force_accel_tol=700):
@@ -201,7 +106,7 @@ class FieldStalkSection:
         self.max_position = 18*1e-2 # centimeters, location of beam end
         self.min_force = 1 # newton, easily cut out the spaces between stalks. Rejects noisy detection regime
         self.min_force_rate = min_force_rate    # newton/sec, only look at data where the stalk is being pushed outward
-        self.max_force_rate = 70                # newton/sec, reject stalk first falling onto sensor beam
+        self.max_force_rate = 80                # newton/sec, reject stalk first falling onto sensor beam
         self.max_pos_rate = 0.05                # m/sec, only look at data where stalk is moving forward (decreasing) on sensor beam, allow some jitter
         self.pos_accel_tol = pos_accel_tol  # m/s^2, reject curvature on either side of good stalk interaction 
         self.force_accel_tol = force_accel_tol # newton/s^2, reject curvature on either side of good stalk interaction
@@ -280,9 +185,6 @@ class FieldStalkSection:
             self.acX = self.acX_raw = data['AcX1'].to_numpy()   # CSV is set up to allow two accelerometers
             self.acY = self.acY_raw = data['AcY1'].to_numpy()
             self.acZ = self.acZ_raw = data['AcZ1'].to_numpy()
-            self.acX = self.acX_raw = self.acX_raw[mask]
-            self.acY = self.acY_raw = self.acY_raw[mask]
-            self.acZ = self.acZ_raw = self.acZ_raw[mask]
 
     def smooth_raw_data(self, strain_window=20, strain_order=1, accel_window=50, accel_order=1):
         self.strain_1 = savgol_filter(self.strain_1, strain_window, strain_order)
@@ -324,17 +226,14 @@ class FieldStalkSection:
             self.force = savgol_filter(self.force, window, order)
             self.position = savgol_filter(self.position, window, order)
 
-    def plot_force_position(self, view_stalks=False, plain=True, show_accels=False):
+    def plot_force_position(self, view_stalks=False, plain=True):
         try:
             time_ini = self.stalks[0].time_loc
             time_end = self.stalks[-1].time_loc
         except:
             time_ini = 0
             time_end = 10
-        if show_accels:
-            fig, ax = plt.subplots(3, 1, sharex=True, figsize=(9.5, 4.8))
-        else:
-            fig, ax = plt.subplots(2, 1, sharex=True, figsize=(9.5, 4.8))
+        fig, ax = plt.subplots(2, 1, sharex=True, figsize=(9.5, 4.8))
         ax[0].plot(self.time - time_ini, self.force, label='Force')
         ax[0].set_ylabel('Force (N)')
         ax[1].plot(self.time - time_ini, self.position*100, label='Position')
@@ -342,11 +241,6 @@ class FieldStalkSection:
         ax[1].plot(self.time - time_ini, self.position_raw*100, label='raw', linewidth=0.5)
         ax[1].set_xlabel('Time (s)')
         ax[1].set_ylabel('Position (cm)')
-        if show_accels:
-            ax[2].plot(self.time - time_ini, self.pitch_smooth, label='Pitch')
-            ax[2].plot(self.time - time_ini, self.roll_smooth, label='Roll')
-            # ax[2].plot(self.time - time_ini, self.acZ, label='Vertical')
-            ax[2].legend()
 
         plt.suptitle(f'{self.configuration}, Date:{self.date}, Test #{self.test_num}\nStalks:{self.stalk_type}')
         plt.xlim(-2, time_end - time_ini + 2)
@@ -356,9 +250,9 @@ class FieldStalkSection:
                 if not np.isnan(stalk.time).all():
                     ax[0].plot(stalk.time - time_ini, stalk.force, c='red')
                     ax[1].plot(stalk.time - time_ini, stalk.position*100, c='red')
-                    if hasattr(stalk, 'fits'):
-                        ax[0].plot(stalk.fits['time'] - time_ini, stalk.fits['force'], c='green')
-                        ax[1].plot(stalk.fits['time'] - time_ini, stalk.fits['position']*100, c='green')
+                    if hasattr(self, 'force_fits'):
+                        ax[0].plot(stalk.time - time_ini, stalk.fits['force'], c='green')
+                        ax[1].plot(stalk.time - time_ini, stalk.fits['position']*100, c='green')
             plt.tight_layout()
 
             # fig, ax = plt.subplots(2, 1, sharex=True, figsize=(9.5, 4.8))
@@ -397,6 +291,81 @@ class FieldStalkSection:
         if smooth:
             self.force_DDT = savgol_filter(self.force_DDT, window, order)
             self.position_DDT = savgol_filter(self.position_DDT, window, order)
+
+    # def find_stalk_interaction(self):
+    #     # Combine conditions into a single boolean mask
+    #     mask = (np.abs(self.position_DDT) < self.pos_accel_tol) & \
+    #         (self.position > self.min_position) & \
+    #         (self.position < self.max_position) & \
+    #         (self.position_DT < self.max_pos_rate) & \
+    #         (self.force > self.min_force) & \
+    #         (self.force_DT < self.max_force_rate) & \
+    #         (self.force_DT > self.min_force_rate) & \
+    #         (np.abs(self.force_DDT) < self.force_accel_tol)
+        
+    #     # Get initial interaction indices
+    #     interaction_indices = np.where(mask)[0]
+
+    #     # Filter out blips (groups with fewer than min_sequential indices)
+    #     if len(interaction_indices) > 0:
+    #         diffs = np.diff(interaction_indices)
+    #         group_starts = np.where(diffs > 1)[0] + 1
+    #         groups = np.split(interaction_indices, group_starts)
+    #         interaction_indices = np.concatenate([g for g in groups if len(g) >= self.min_seq_points]) if groups else np.array([])
+        
+    #     # Reconnect gaps < 30% of average gap
+    #     new_indices = []
+    #     for i in range(len(interaction_indices) - 1):
+    #         new_indices.append(interaction_indices[i])
+    #         gap = interaction_indices[i + 1] - interaction_indices[i]
+    #         if gap > 1 and gap < self.stitch_gap_limit and abs(self.force[interaction_indices[i+1]] - self.force[interaction_indices[i]]) < 2:
+    #             new_indices.extend(range(interaction_indices[i] + 1, interaction_indices[i + 1]))
+    #     new_indices.append(interaction_indices[-1])
+    #     interaction_indices = np.array(new_indices, dtype=np.int64)
+
+    #     # Assign results
+    #     self.interaction_indices = interaction_indices
+    #     self.stalk_force = self.force[interaction_indices]
+    #     self.stalk_position = self.position[interaction_indices]
+    #     self.stalk_time = self.time[interaction_indices]
+
+    # def collect_stalk_sections(self):
+    #     gaps = np.concatenate(([0], np.diff(self.interaction_indices)))
+    #     big_gaps = gaps[gaps>1]
+    #     avg_gap = np.average(big_gaps)
+
+    #     self.stalk_forces = []
+    #     self.stalk_positions = []
+    #     self.stalk_times = []
+    #     stalk_force_section = []
+    #     stalk_position_section = []
+    #     stalk_time_section = []
+        
+    #     for i in range(len(self.interaction_indices)):
+    #         if gaps[i] <= 1:    # accumulate point on current stalk
+    #             stalk_force_section.append(self.stalk_force[i])
+    #             stalk_position_section.append(self.stalk_position[i])
+    #             stalk_time_section.append(self.stalk_time[i])
+    #         else:               # store current stalk and reset accumulation
+    #             if stalk_force_section[0] < stalk_force_section[-1] and stalk_position_section[0] > stalk_position_section[-1] and \
+    #                 stalk_time_section[-1] - stalk_time_section[0] >= 0.5 and \
+    #                     max(stalk_position_section)*0.95 <= stalk_position_section[0]:
+    #                 self.stalk_forces.append(np.array(stalk_force_section))
+    #                 self.stalk_positions.append(np.array(stalk_position_section))
+    #                 self.stalk_times.append(np.array(stalk_time_section))
+    #             stalk_force_section = []
+    #             stalk_position_section = []
+    #             stalk_time_section = []
+                
+    #             if gaps[i] >= avg_gap*1.6:  # if the gap is very large, skip next stalk number
+    #                 self.stalk_forces.append(np.nan)
+    #                 self.stalk_positions.append(np.nan)
+    #                 self.stalk_times.append(np.nan)
+        
+    #     # add the last stalk
+    #     self.stalk_forces.append(np.array(stalk_force_section))
+    #     self.stalk_positions.append(np.array(stalk_position_section))
+    #     self.stalk_times.append(np.array(stalk_time_section))
 
     def find_stalk_interaction(self):
         mask = (self.force > self.min_force) & \
@@ -451,6 +420,9 @@ class FieldStalkSection:
         groups = np.split(self.interaction_indices, split_points)
         
         self.stalks = []
+        self.stalk_forces = []
+        self.stalk_positions = []
+        self.stalk_times = []
         
         for group in groups:
             if len(group) < self.min_seq_points:
@@ -473,25 +445,28 @@ class FieldStalkSection:
             if slope_f > 0 and slope_p < 0 and r_f**2 > 0.5 and r_p**2 > 0.5:
                 stalk = StalkInteraction(time, force, position, self)
                 self.stalks.append(stalk)
+                self.stalk_forces.append(force)
+                self.stalk_positions.append(position)
+                self.stalk_times.append(time)
 
     def calc_section_stiffnesses(self):
         # print(f'Computing stiffness for {self.stalk_type} stalks')
-        # self.force_fits = []
-        # self.position_fits = []
-        # self.flex_stiffs = []
+        self.force_fits = []
+        self.position_fits = []
+        self.flex_stiffs = []
         for stalk in self.stalks:
             if not np.isnan(stalk.time).all():
                 stalk.calc_stalk_stiffness()
-                # self.force_fits.append(stalk.fits['force'])
-                # self.position_fits.append(stalk.fits['position'])
-                # self.flex_stiffs.append(stalk.stiffness)
+                self.force_fits.append(stalk.fits['force'])
+                self.position_fits.append(stalk.fits['position'])
+                # self.stalk_times.append(stalk.time)
+                self.flex_stiffs.append(stalk.stiffness)
             else:
-                pass
-                # self.force_fits.append(np.nan)
-                # self.position_fits.append(np.nan)
-                # self.flex_stiffs.append(np.nan)
+                self.force_fits.append(np.nan)
+                self.position_fits.append(np.nan)
+                self.flex_stiffs.append(np.nan)
             
-        # results.append(self.flex_stiffs)
+        results.append(self.flex_stiffs)
 
     def plot_section_stiffnesses(self):
         try:
@@ -508,51 +483,7 @@ class FieldStalkSection:
         plt.xlabel('Time after first stalk (s)')
         plt.ylabel('Flexural Stiffness (N/m^2)')
 
-    def calc_angles(self):
-        cal_csv_path = r'AllInOne\accel_calibration_history.csv'
-        cal_data = pd.read_csv(cal_csv_path)
-        latest_cal = cal_data.iloc[-1]
-
-        self.m_x = latest_cal['Gain X']; self.b_x = latest_cal['Offset X']
-        self.m_y = latest_cal['Gain Y']; self.b_y = latest_cal['Offset Y']
-        self.m_z = latest_cal['Gain Z']; self.b_z = latest_cal['Offset Z']
-        
-        self.x_g = self.acX*self.m_x + self.b_x
-        self.y_g = self.acY*self.m_y + self.b_y
-        self.z_g = self.acZ*self.m_z + self.b_z
-
-        # Calculate angles (in radians) about global x and y axes
-        theta_x = np.arctan2(-self.y_g, np.sqrt(self.x_g**2 + self.z_g**2))  # Angle about global x-axis
-        theta_y = np.arctan2(self.x_g, np.sqrt(self.y_g**2 + self.z_g**2))  # Angle about global y-axis
-
-
-        self.pitch = np.degrees(theta_x)
-        self.roll = np.degrees(theta_y)
-        self.pitch_smooth = savgol_filter(self.pitch, 100, 2)
-        self.roll_smooth = savgol_filter(self.roll, 100, 2)
-
-    def plot_accels(self):
-        fig, ax = plt.subplots(2, 1, sharex=True, figsize=(9.5, 6))
-
-        ax[0].plot(self.time, self.pitch_smooth, label='Pitch')
-        ax[0].plot(self.time, self.roll_smooth, label='Roll')
-        ax[1].plot(self.time, self.z_g, label='Vertical')
-        ax[0].legend()
-
-        ax[0].axhline(0, c='red', linewidth=0.3)
-        ax[0].axhline(10, c='red', linewidth=0.3)
-        ax[0].axhline(15.1, c='red', linewidth=0.3)
-        ax[0].axhline(30.25, c='red', linewidth=0.3)
-        ax[0].axhline(-10, c='red', linewidth=0.3)
-        ax[0].axhline(-15.1, c='red', linewidth=0.3)
-        ax[0].axhline(-30.25, c='red', linewidth=0.3)
-
-        ax[1].axhline(1, c='red', linewidth=0.3)
-        ax[1].axhline(0, c='red', linewidth=0.3)
-        ax[1].axhline(-1, c='red', linewidth=0.3)
-
-
-def show_force_position(dates, test_nums, show_accels):
+def show_force_position(dates, test_nums):
     for date in dates:
         for test_num in test_nums:
             test = FieldStalkSection(date=date, test_num=test_num)
@@ -565,22 +496,11 @@ def show_force_position(dates, test_nums, show_accels):
                 test.find_stalk_interaction()
                 test.collect_stalks()
                 test.calc_section_stiffnesses()
-                test.calc_angles()
-
-                test.plot_force_position(view_stalks=True, show_accels=show_accels)
+                test.plot_force_position(view_stalks=True)
+                test.plot_section_stiffnesses()
                 test.plot_section_stiffnesses()
     plt.show()
 
-def show_accels(dates, test_nums):
-    for date in dates:
-        for test_num in test_nums:
-            test = FieldStalkSection(date=date, test_num=test_num)
-            if test.exist:
-                test.smooth_raw_data()
-                test.calc_angles()
-                test.plot_accels()
-    plt.show()
 
 if __name__ == '__main__':
-    show_force_position(dates=['08_07'], test_nums=range(41, 50+1), show_accels=False)
-    # show_accels(dates=['08_13'], test_nums=[3])
+    show_force_position(dates=['08_07'], test_nums=range(41, 50+1))
