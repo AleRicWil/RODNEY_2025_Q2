@@ -21,7 +21,7 @@ class StalkInteraction:
         self.position = position
         self.fits = {}
         # self.stiffness = {}
-        self.height = section.height * 0.885
+        self.height = section.height# * 0.885
         self.yaw = section.yaw# * 1.48
 
         # Force vs deflection
@@ -1541,8 +1541,8 @@ def correlation(rodney_config, date=None, stalk_type=None):
 
     rodney_medians = np.array(rodney_medians)
     darling_medians = np.array(darling_medians)
-
     slope, inter, r, _, _ = linregress(darling_medians, rodney_medians)
+    
     plt.plot(darling_medians, slope*darling_medians + inter, c='black', linewidth=0.5)
     plt.scatter(darling_medians, rodney_medians, label=fr'Median $R^2$: {r**2:.4f} Slope: {slope:.3f}, Int: {inter:.2f}')
 

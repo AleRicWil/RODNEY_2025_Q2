@@ -1,13 +1,17 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.widgets import Button
 import scipy.stats as stats
 import csv
 import os
 from skopt import gp_minimize
 from skopt.space import Real
 from scipy.signal import savgol_filter
+from scipy.stats import linregress
 import time
+import json
+import os
 
 local_run_flag = False
 results = []
@@ -103,7 +107,7 @@ class StalkInteraction:
         
         count = self.filter_data(self.time, self.force, self.position, self.pos_x, self.force_D_pos_x)
         self.clean_FX_data()
-        self.plot_filtered_data(count)
+        # self.plot_filtered_data(count)
         
         self.fits['time'] = self.time_filt
         self.fits['force'] = np.polyval([self.slope_f, self.intercept_f], self.time_filt)
@@ -550,6 +554,153 @@ class FieldStalkSection:
         ax[1].axhline(-1, c='red', linewidth=0.3)
 
 
+class TestResults:
+    def __init__(self):
+        self.tests = []
+        self.groups = []
+
+    def add_test(self, test):
+        time_ini = test.stalks[0].time_loc
+        test_data = {
+            'date': test.date,
+            'test_num': test.test_num,
+            'stalk_type': test.stalk_type,
+            'height': test.height,
+            'yaw': test.yaw,
+            'stalks': [{'time_loc': stalk.time_loc - time_ini,
+                        'stiffness': stalk.stiffness} for stalk in test.stalks],
+            'num_stalks': len(test.stalks)
+        }
+        self.tests.append(test_data)
+
+    def get_all_stalks(self):
+        return [stalk for test in self.tests for stalk in test['stalks']]
+
+    def save_groups(self, filename):
+        with open(filename, 'w') as f:
+            json.dump(self.groups, f)
+
+    def load_groups(self, filename):
+        if os.path.exists(filename):
+            with open(filename, 'r') as f:
+                self.groups = json.load(f)
+                self.groups.sort(key=lambda x: x['avg_time_loc'])
+
+    def group_stalks_by_time(self, window_tol=1, date=None, stalk_type=None):
+        all_stalks = self.get_all_stalks()
+        if not all_stalks:
+            print("No stalks in runtime. Trying load from file")
+            
+        filename = f"groups_{date}_{stalk_type}.json"
+        self.load_groups(filename)
+        if self.groups:
+            print(f"Loaded groups from {filename}")
+            return
+
+        times = np.array([stalk['time_loc'] for stalk in all_stalks])
+        fig, ax = plt.subplots()
+        colors = ['blue'] * len(times)
+        scatter = ax.scatter(range(len(times)), times, c=colors, picker=5)
+
+        selected = set()
+        processed = set()
+
+        def update_colors():
+            new_colors = ['blue'] * len(times)
+            for i in selected:
+                new_colors[i] = 'yellow'
+            for i in processed:
+                new_colors[i] = 'green'
+            scatter.set_facecolors(new_colors)
+            fig.canvas.draw_idle()
+
+        def on_pick(event):
+            if event.artist != scatter:
+                return
+            ind = event.ind[0]
+            if ind in processed:
+                return
+            if ind in selected:
+                selected.remove(ind)
+            else:
+                selected.add(ind)
+            update_colors()
+
+        def on_next(event):
+            if selected:
+                group_stiffness = [all_stalks[i]['stiffness'] for i in selected]
+                group_times = [all_stalks[i]['time_loc'] for i in selected]
+                self.groups.append({
+                    'stiffnesses': group_stiffness,
+                    'avg_time_loc': np.mean(group_times)
+                })
+                self.groups.sort(key=lambda x: x['avg_time_loc'])
+                processed.update(selected)
+                selected.clear()
+                update_colors()
+
+        def on_stop(event):
+            if selected:
+                on_next(event)
+            self.save_groups(filename)
+            plt.close(fig)
+
+        fig.canvas.mpl_connect('pick_event', on_pick)
+
+        ax_next = plt.axes([0.7, 0.05, 0.1, 0.075])
+        btn_next = Button(ax_next, 'Next Stalk')
+        btn_next.on_clicked(on_next)
+
+        ax_stop = plt.axes([0.81, 0.05, 0.1, 0.075])
+        btn_stop = Button(ax_stop, 'Stop')
+        btn_stop.on_clicked(on_stop)
+
+        plt.show()
+
+    def show_results(self, correlation_flag, section):
+        rodney_medians = []
+        rodney_times = []
+        for stalk in self.groups:
+            rodney_medians.append(np.clip(np.median(stalk['stiffnesses']), 0, 30))
+            plt.figure(1000)
+            ele1= plt.boxplot(stalk['stiffnesses'], positions=[round(stalk['avg_time_loc'],1)], label='Rodney Boxplot')
+            rodney_times.append(round(stalk['avg_time_loc'],1))
+            
+        
+        if correlation_flag:
+            darling_results = pd.read_csv(r'Results\Darling Field Data_08_07_2025.csv')[section.split()[0]].dropna()
+            print(darling_results)
+            darling_medians = [res for res in darling_results]
+            print(darling_medians)
+            print(rodney_medians)
+
+            rodney_medians = np.array(rodney_medians)
+            rodney_times = np.array(rodney_times)
+            darling_medians = np.array(darling_medians)
+            slope, inter, r, _, _ = linregress(darling_medians, rodney_medians)
+
+            plt.figure(1000)
+            ele2 = plt.scatter(rodney_times, darling_medians, label='Darling')
+            ele3 = plt.scatter(rodney_times, rodney_medians, label='Rodney')
+            plt.xlabel('Elapsed Test Time (s)')
+            plt.ylabel('Median Stiffness (N/m^2)')
+            plt.legend(handles=[ele1, ele2, ele3], labels=['Rodney Boxplot', 'Darling', 'Rodney'])
+
+            plt.figure(1001)
+            plt.plot(darling_medians, slope*darling_medians + inter, c='black', linewidth=0.5, label='Correlation Trendline')
+            plt.scatter(darling_medians, rodney_medians, label=fr'Median $R^2$: {r**2:.4f} Slope: {slope:.3f}')
+
+            plt.plot(darling_medians, darling_medians, c='blue', linewidth='0.5', label='1:1')
+            plt.xlabel('Darling Stiffness')
+            plt.ylabel('Rodney Stiffness')
+            plt.axis('equal')
+            plt.legend()
+            plt.show()
+
+        plt.show()
+
+
+
 def show_force_position(dates, test_nums, show_accels):
     for date in dates:
         for test_num in test_nums:
@@ -579,6 +730,38 @@ def show_accels(dates, test_nums):
                 test.plot_accels()
     plt.show()
 
+def process_and_store_section(dates, test_nums):
+    sect_res = TestResults()
+    for date in dates:
+        for test_num in test_nums:
+            test = FieldStalkSection(date=date, test_num=test_num)
+            if test.exist:
+                test.smooth_raw_data()
+                test.shift_initials(time_cutoff=1.0)
+                test.calc_force_position()
+                test.differentiate_force_position()
+                test.differentiate_force_position_DT()
+                test.find_stalk_interaction()
+                test.collect_stalks()
+                test.calc_section_stiffnesses()
+                test.calc_angles()
+
+                sect_res.add_test(test)
+
+        sect_res.group_stalks_by_time(date=date, stalk_type=test.stalk_type)
+
+def show_section_results(dates, test_nums, correlation_flag=False):
+    sect_res = TestResults()
+    for date in dates:
+        test = FieldStalkSection(date=date, test_num=test_nums[0])
+        if test.exist:
+            sect_res.group_stalks_by_time(date=date, stalk_type=test.stalk_type)
+            sect_res.show_results(correlation_flag, test.stalk_type)
+
+
 if __name__ == '__main__':
-    show_force_position(dates=['08_07'], test_nums=range(41, 50+1), show_accels=False)
+    # show_force_position(dates=['08_07'], test_nums=range(41, 50+1), show_accels=False)
     # show_accels(dates=['08_13'], test_nums=[3])
+    # process_and_store_section(dates=['08_07'], test_nums=range(1, 30+1))
+    show_section_results(dates=['08_07'], test_nums=[21], correlation_flag=True)
+
