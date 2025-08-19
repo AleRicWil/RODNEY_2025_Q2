@@ -591,7 +591,7 @@ class TestResults:
         if not all_stalks:
             print("No stalks in runtime. Trying load from file")
             
-        filename = f"groups_{date}_{stalk_type}.json"
+        filename = fr"Results\groups_{date}_{stalk_type}.json"
         self.load_groups(filename)
         if self.groups:
             print(f"Loaded groups from {filename}")
@@ -758,10 +758,57 @@ def show_section_results(dates, test_nums, correlation_flag=False):
             sect_res.group_stalks_by_time(date=date, stalk_type=test.stalk_type)
             sect_res.show_results(correlation_flag, test.stalk_type)
 
+def show_day_results(date, correlation_flag=False):
+    import re
+    sections = []
+
+
+    folder = r'Results'
+    for filename in os.listdir(folder):
+        if filename.endswith(".json") and date in filename:
+            section_code = re.search(r"\d{2}-[A-Z]", filename).group()
+            darling_results = pd.read_csv(rf'Results\Darling Field Data_{date}_2025.csv')[section_code].dropna()
+            darling_medians = [res for res in darling_results]
+            with open(os.path.join(folder, filename), 'r') as f:
+                stalks = json.load(f)
+                stalks.sort(key=lambda x: x['avg_time_loc'])
+                rodney_medians = [np.median(stalk['stiffnesses']) for stalk in stalks]
+                section = {'section_code': section_code, 'stalks': stalks, 'rodney_medians': rodney_medians, 'darling_medians': darling_medians}
+                sections.append(section)
+    max = 0
+    all_darling = []; all_rodney = []
+    for section in sections:
+        section_max = np.max(section['darling_medians'])
+        if section_max > max:
+            max = section_max
+        for val1, val2 in zip(section['darling_medians'], section['rodney_medians']):
+            all_darling.append(val1); all_rodney.append(val2)
+        plt.scatter(section['darling_medians'], section['rodney_medians'], label=section['section_code'])
+    
+    
+    rodney_medians = np.array(all_rodney)
+    darling_medians = np.array(all_darling)
+    slope, inter, r, _, _ = linregress(darling_medians, rodney_medians)
+
+    plt.plot(np.linspace(0, max, 10), np.linspace(0, max, 10), c='blue', linewidth=0.5, label='1:1')
+    plt.plot(darling_medians, darling_medians*slope+inter, c='black', label='Trendline')
+    plt.title(rf'$R^2$: {r**2:.4f}, Slope: {slope:.2f}')
+    plt.xlabel(r'Darling Stalk Stiffness (N/$m^2$)')
+    plt.ylabel(r'Rodney Stalk Stiffness (N/$m^2$)')
+    plt.legend()
+
+    # plt.figure()
+    # plt.scatter(all_darling, all_rodney, label=f'All {date} tests')
+    # plt.plot(np.linspace(0, max, 10), np.linspace(0, max, 10), c='blue', linewidth=0.5, label='1:1')
+    # plt.legend()
 
 if __name__ == '__main__':
     # show_force_position(dates=['08_07'], test_nums=range(41, 50+1), show_accels=False)
     # show_accels(dates=['08_13'], test_nums=[3])
     # process_and_store_section(dates=['08_07'], test_nums=range(1, 30+1))
-    show_section_results(dates=['08_07'], test_nums=[21], correlation_flag=True)
+    # show_section_results(dates=['08_07'], test_nums=[21], correlation_flag=True)
+    show_day_results(date='08_07', correlation_flag=True)
+    
+    
+    plt.show()
 
