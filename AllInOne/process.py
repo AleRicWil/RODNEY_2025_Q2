@@ -796,11 +796,15 @@ class LabStalkRow:
 
 def boxplot_data(rodney_config, date=None, stalk_type=None, plot_num=20):
     results_df = pd.read_csv(r'Results\results.csv')
+    
     if not date == None:
         results_df = results_df[results_df['Date'] == date]
     if not stalk_type == None:
         results_df = results_df[results_df['stalk array (lo med hi)'] == stalk_type]
     config_results = results_df[results_df['rodney configuration'] == rodney_config]
+    offset = config_results['sensor offset (cm to gauge 2)'].iloc[0]
+    print(offset)
+
     lo_results = config_results[config_results['stalk array (lo med hi)'] == 'lo']
     med_results = config_results[config_results['stalk array (lo med hi)'] == 'med']
     hi_results = config_results[config_results['stalk array (lo med hi)'] == 'hi']
@@ -809,8 +813,11 @@ def boxplot_data(rodney_config, date=None, stalk_type=None, plot_num=20):
     med_EIs = med_results[['Stalk1', 'Stalk2', 'Stalk3', 'Stalk4', 'Stalk5', 'Stalk6', 'Stalk7', 'Stalk8', 'Stalk9']]
     hi_EIs = hi_results[['Stalk1', 'Stalk2', 'Stalk3', 'Stalk4', 'Stalk5', 'Stalk6', 'Stalk7', 'Stalk8', 'Stalk9']]
 
+    med_stats = med_EIs.describe()
+    med_mean = np.mean(med_stats.loc['mean'])
+
     plt.figure(plot_num)
-    plt.title(rodney_config)
+    plt.title(fr'{rodney_config}, Offset: {offset}cm, Avg: {med_mean:.2f} N/$m^2$')
     plt.ylabel('Flexural Stiffness (N/m^2)')
     for _, row in lo_EIs.iloc[2:].iterrows():
         plt.scatter(range(1, len(row) + 1), row, c='red', s=2)
@@ -824,6 +831,7 @@ def boxplot_data(rodney_config, date=None, stalk_type=None, plot_num=20):
                    whiskerprops=dict(color='black'),
                    capprops=dict(color='green'),
                    medianprops=dict(color='black'))
+    plt.axhline(med_mean)
     for _, row in hi_EIs.iloc[2:].iterrows():
         plt.scatter(range(1, len(row) + 1), row, c='blue', s=2)
     hi_EIs.boxplot(grid=False, patch_artist=True, boxprops=dict(facecolor='none', color='blue'),
@@ -1558,8 +1566,8 @@ if __name__ == "__main__":
     local_run_flag = True
     
     '''Batch run of same configuration'''
-    for i in range(1, 15+1):
-        process_data(date='08_13', test_num=f'{i}', view=False, overwrite=True)
+    for i in range(61, 70+1):
+        process_data(date='08_19', test_num=f'{i}', view=False, overwrite=True)
     # show_force_position(dates=['08_06'], test_nums=[1])
 
     # boxplot_data(rodney_config='Integrated Beam Prototype 1', date='07_03', plot_num=104)
@@ -1570,7 +1578,7 @@ if __name__ == "__main__":
     # boxplot_data(rodney_config='Integrated Beam Printed Guide 1', date='07_16', plot_num=109)
     # boxplot_data(rodney_config='Integrated Beam Fillet 1', date='08_13', plot_num=110)
 
-    # boxplot_data(rodney_config='Integrated Beam Fillet 1', date='07_24', plot_num=108)
+    boxplot_data(rodney_config='Integrated Beam Fillet 1', date='08_19', plot_num=108)
     '''end batch run'''
 
     '''Statistics'''
@@ -1591,6 +1599,6 @@ if __name__ == "__main__":
     # Optimize parameters for a specific configuration
     # optimize_parameters(dates=['07_16'], rodney_config='Integrated Beam Printed Guide 1')
 
-    correlation(rodney_config='Integrated Beam Fillet 1', date='08_13')
+    # correlation(rodney_config='Integrated Beam Fillet 1', date='08_13')
 
     plt.show()
