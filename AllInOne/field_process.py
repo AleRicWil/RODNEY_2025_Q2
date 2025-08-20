@@ -25,7 +25,7 @@ class StalkInteraction:
         self.force = force
         self.position = position
         self.fits = {}
-        self.stiffness = {}
+        # self.stiffness = {}
         self.height = section.height
         self.yaw = section.yaw
 
@@ -477,23 +477,9 @@ class FieldStalkSection:
                 self.stalks.append(stalk)
 
     def calc_section_stiffnesses(self):
-        # print(f'Computing stiffness for {self.stalk_type} stalks')
-        # self.force_fits = []
-        # self.position_fits = []
-        # self.flex_stiffs = []
         for stalk in self.stalks:
             if not np.isnan(stalk.time).all():
                 stalk.calc_stalk_stiffness()
-                # self.force_fits.append(stalk.fits['force'])
-                # self.position_fits.append(stalk.fits['position'])
-                # self.flex_stiffs.append(stalk.stiffness)
-            else:
-                pass
-                # self.force_fits.append(np.nan)
-                # self.position_fits.append(np.nan)
-                # self.flex_stiffs.append(np.nan)
-            
-        # results.append(self.flex_stiffs)
 
     def plot_section_stiffnesses(self):
         try:
