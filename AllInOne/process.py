@@ -21,7 +21,7 @@ class StalkInteraction:
         self.fits = {}
         # self.stiffness = {}
         self.height = section.height# * 0.885
-        self.yaw = section.yaw# * 1.48
+        self.yaw =np.radians(25.8)# section.yaw# * 1.48
 
         # Force vs deflection
         self.pos_x = (section.max_position - self.position)*np.sin(self.yaw)
@@ -938,8 +938,8 @@ if __name__ == "__main__":
     local_run_flag = True
     
     '''Batch run of same configuration'''
-    # for i in range(21, 70+1):
-    #     process_data(date='08_19', test_num=f'{i}', view=True, overwrite=True)
+    for i in range(141, 150+1):
+        process_data(date='08_21', test_num=f'{i}', view=True, overwrite=True)
     # show_force_position(dates=['08_06'], test_nums=[1])
 
     # boxplot_data(rodney_config='Integrated Beam Prototype 1', date='07_03', plot_num=104)
@@ -950,7 +950,8 @@ if __name__ == "__main__":
     # boxplot_data(rodney_config='Integrated Beam Printed Guide 1', date='07_16', plot_num=109)
     # boxplot_data(rodney_config='Integrated Beam Fillet 1', date='08_13', plot_num=110)
 
-    boxplot_data(rodney_config='Integrated Beam Fillet 1', date='08_19', plot_num=108)
+    boxplot_data(rodney_config='Integrated Beam Fillet 1', date='08_21', plot_num=108)
+    # boxplot_data(rodney_config='Integrated Beam Fillet 1 Normal', date='08_21', plot_num=109)
     '''end batch run'''
 
     '''Statistics'''
@@ -961,7 +962,8 @@ if __name__ == "__main__":
     # print('3 mean, median', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_11', plot_num=208))
     # print('mean, median', get_stats(rodney_config='Integrated Beam Printed Guide 1', date='07_16', plot_num=209))
     # print('mean, median', get_stats(rodney_config='Integrated Beam Fillet 1', date='07_24', plot_num=210))
-    print('mean, median', get_stats(rodney_config='Integrated Beam Fillet 1', date='08_19', plot_num=211))
+    print('mean, median', get_stats(rodney_config='Integrated Beam Fillet 1', date='08_21', plot_num=211))
+    # print('mean, median', get_stats(rodney_config='Integrated Beam Fillet 1 Normal', date='08_21', plot_num=212))
     '''end statistics'''
 
     '''Single file run and view full file. Does not save result'''
