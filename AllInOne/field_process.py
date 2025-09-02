@@ -789,11 +789,11 @@ def show_day_results(date, correlation_flag=False):
     # plt.legend()
 
 if __name__ == '__main__':
-    # show_force_position(dates=['08_07'], test_nums=range(41, 50+1), show_accels=False)
+    # show_force_position(dates=['08_22'], test_nums=range(1, 10+1), show_accels=False)
     # show_accels(dates=['08_13'], test_nums=[3])
-    # process_and_store_section(dates=['08_07'], test_nums=range(1, 30+1))
+    process_and_store_section(dates=['08_22'], test_nums=range(1, 10+1))
     # show_section_results(dates=['08_07'], test_nums=[21], correlation_flag=True)
-    show_day_results(date='08_07', correlation_flag=True)
+    # show_day_results(date='08_07', correlation_flag=True)
     
     
     plt.show()
