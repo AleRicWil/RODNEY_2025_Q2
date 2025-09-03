@@ -1,17 +1,13 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.widgets import Button
+from matplotlib.widgets import Button, SpanSelector
 import scipy.stats as stats
 import csv
 import os
-from skopt import gp_minimize
-from skopt.space import Real
 from scipy.signal import savgol_filter
 from scipy.stats import linregress
-import time
 import json
-import os
 
 local_run_flag = False
 results = []
@@ -192,6 +188,146 @@ class StalkInteraction:
         self.slope_fx, self.intercept_fx, self.r_fx, _, _ = stats.linregress(self.pos_x_clean, self.force_clean)
         self.slope_f, self.intercept_f, self.r_f, _, _ = stats.linregress(self.time_clean, self.force_clean)
         self.slope_p, self.intercept_p, self.r_p, _, _ = stats.linregress(self.time_clean, self.position_clean)
+
+    def interactive_calc_stiffness(self, stalk_num, test_num, date, stalk_type):
+        # Discard all position = 0
+        mask = self.position != 0
+        self.time = self.time[mask]
+        self.force = self.force[mask]
+        self.position = self.position[mask]
+        self.pos_x = self.pos_x[mask]
+
+        # Keep indices where x is strictly decreasing over reverse time
+        keep_indices = [len(self.pos_x) - 1]
+        for i in range(len(self.pos_x) - 2, -1, -1):
+            if self.pos_x[i] < self.pos_x[keep_indices[-1]]:
+                keep_indices.append(i)
+        
+        keep_indices.reverse()
+        if len(keep_indices) < 10:
+            self.stiffness = np.nan
+            return
+        
+        self.time = np.array([self.time[i] for i in keep_indices])
+        self.pos_x = np.array([self.pos_x[i] for i in keep_indices])
+        self.force = np.array([self.force[i] for i in keep_indices])
+        self.position = np.array([self.position[i] for i in keep_indices])
+
+        # Create interactive plot with complete data
+        fig, ax = plt.subplots(2, 2, sharex=False, figsize=(10, 10))#, gridspec_kw={'height_ratios': [1, 1], 'width_ratios': [1, 1]})
+        ax[1, 0].remove()
+        ax[1, 1].remove()
+        ax_bottom = fig.add_subplot(212, sharex=None, sharey=None) # Create a new full-width subplot for bottom row
+        # Gradient color based on time
+        indices = np.arange(len(self.time))
+        norm = plt.Normalize(indices.min(), indices.max())
+        cmap = plt.get_cmap('viridis')
+
+        ax[0,0].scatter(self.time, self.force, s=5, c=indices, cmap=cmap, norm=norm)
+        ax[0,0].set_ylabel('Force (N)')
+
+        ax[0,1].scatter(self.time, self.position, s=5, c=indices, cmap=cmap, norm=norm)
+        # ax[0,1].set_ylim(0, 0.20)
+        ax[0,1].set_ylabel('Position (m)')
+        ax[0,1].set_xlabel('Time (s)')
+
+        ax_bottom.scatter(self.pos_x, self.force, s=5, c=indices, cmap=cmap, norm=norm)
+        # ax_bottom.set_xlim(0, 0.05)
+        ax_bottom.set_ylabel('Force (N)')
+        ax_bottom.set_xlabel('Deflection (m)')
+
+        plt.suptitle(f'Select spans on FvX for stiffness calculation\nStalk:{stalk_num}, Test:{test_num}')
+
+        self.selected_spans = []
+        self.current_span = None
+        self.current_span_patches = {'force_pos': None, 'force_time': None, 'pos_time': None}
+
+        def onselect(xmin, xmax):
+            # Clear previous spans
+            for patch in self.current_span_patches.values():
+                if patch:
+                    patch.remove()
+
+            self.current_span = (xmin, xmax)
+            # Convert position range to time range for force vs time and position vs time plots
+            time_mask = (self.pos_x >= xmin) & (self.pos_x <= xmax)
+            if np.any(time_mask):
+                time_min, time_max = np.min(self.time[time_mask]), np.max(self.time[time_mask])
+                # Draw spans on all plots
+                self.current_span_patches['force_time'] = ax[0, 0].axvspan(time_min, time_max, alpha=0.5, facecolor='tab:blue')
+                self.current_span_patches['pos_time'] = ax[0, 1].axvspan(time_min, time_max, alpha=0.5, facecolor='tab:blue')
+                self.current_span_patches['force_pos'] = ax_bottom.axvspan(xmin, xmax, alpha=0.5, facecolor='tab:blue')
+            fig.canvas.draw_idle()
+
+        span = SpanSelector(ax_bottom, onselect, 'horizontal', useblit=True,
+                            props=dict(alpha=0.5, facecolor='tab:blue'))
+
+        def add(event):
+            if self.current_span:
+                self.selected_spans.append(self.current_span)
+                # Convert position range to time range for green spans
+                time_mask = (self.pos_x >= self.current_span[0]) & (self.pos_x <= self.current_span[1])
+                if np.any(time_mask):
+                    time_min, time_max = np.min(self.time[time_mask]), np.max(self.time[time_mask])
+                    # Draw green spans on all plots
+                    ax[0, 0].axvspan(time_min, time_max, alpha=0.3, facecolor='green')
+                    ax[0, 1].axvspan(time_min, time_max, alpha=0.3, facecolor='green')
+                    ax_bottom.axvspan(self.current_span[0], self.current_span[1], alpha=0.3, facecolor='green')
+                # Clear current span
+                for patch in self.current_span_patches.values():
+                    if patch:
+                        patch.remove()
+                self.current_span = None
+                self.current_span_patches = {'force_pos': None, 'force_time': None, 'pos_time': None}
+                fig.canvas.draw_idle()
+
+        def done(event):
+            if self.selected_spans:
+                mask = np.full(len(self.pos_x), False)
+                for xmin, xmax in self.selected_spans:
+                    current_mask = (self.pos_x >= xmin) & (self.pos_x <= xmax)
+                    mask = np.logical_or(mask, current_mask)
+                selected_pos_x = self.pos_x[mask]
+                selected_force = self.force[mask]
+                selected_pos = self.position[mask]
+                selected_time = self.time[mask]
+                save_stalk(selected_time, selected_force, selected_pos)
+                if len(selected_pos_x) >= 2:
+                    slope, intercept, r, _, _ = stats.linregress(selected_pos_x, selected_force)
+                    self.slope_fx = slope
+                    self.intercept_fx = intercept
+                    self.r_fx = r
+                    self.stiffness = (slope * self.height**3) / 3
+                else:
+                    self.stiffness = np.nan
+            else:
+                self.stiffness = np.nan
+            plt.close(fig)
+
+        def reject(event):
+            self.stiffness = np.nan
+            plt.close(fig)
+
+        def save_stalk(time, force, position):
+            os.makedirs(f'Results/Field/{date}/{stalk_type}/Stalk Traces', exist_ok=True)
+            df = pd.DataFrame({'Time': time, 'Force': force, 'Position': position})
+            path = f'Results/Field/{date}/{stalk_type}/Stalk Traces/S{stalk_num:02d}_{test_num:02d}.csv'
+            df.to_csv(path, index=False)
+            print(f"Saved stalk {stalk_num} to {path}")  # Debug output
+
+        ax_add = plt.axes([0.6, 0.025, 0.1, 0.075])
+        btn_add = Button(ax_add, 'Add Span')
+        btn_add.on_clicked(add)
+
+        ax_done = plt.axes([0.7, 0.025, 0.1, 0.075])
+        btn_done = Button(ax_done, 'Done')
+        btn_done.on_clicked(done)
+
+        ax_reject = plt.axes([0.8, 0.025, 0.1, 0.075])
+        btn_reject = Button(ax_reject, 'Reject')
+        btn_reject.on_clicked(reject)
+
+        plt.show(block=True)
 
 
 class FieldStalkSection:
@@ -539,6 +675,84 @@ class FieldStalkSection:
         ax[1].axhline(0, c='red', linewidth=0.3)
         ax[1].axhline(-1, c='red', linewidth=0.3)
 
+    def interactive_clip_and_save(self, num_stalks):
+        # Run automatic detection first to estimate num_stalks and guide user with red overlays
+        self.find_stalk_interaction()
+        self.collect_stalks()
+
+        fig, ax = plt.subplots(2, 1, sharex=True, figsize=(9.5, 4.8))
+        ax[0].plot(self.time, self.force, label='Force')
+        ax[0].set_ylabel('Force (N)')
+        ax[1].plot(self.time, self.position, label='Position')
+        ax[1].set_xlabel('Time (s)')
+        ax[1].set_ylabel('Position (m)')
+        plt.suptitle(f'{self.date} Test {self.test_num} {self.stalk_type}\nSelect {num_stalks} stalk interactions')
+
+        # Overlay automatic detections in red for guidance
+        for stalk in self.stalks:
+            if not np.isnan(stalk.time).all():
+                ax[0].plot(stalk.time, stalk.force, c='red')
+                ax[1].plot(stalk.time, stalk.position, c='red')
+
+        self.spans = []
+        self.current_span = None
+        self.current_span_patch = None
+
+        def onselect(xmin, xmax):
+            # Remove previous temporary span if it exists
+            if self.current_span_patch:
+                self.current_span_patch.remove()
+            self.current_span = (xmin, xmax)
+            self.current_span_patch = ax[1].axvspan(xmin, xmax, alpha=0.5, color='tab:blue')
+            fig.canvas.draw_idle()
+            print(self.current_span)
+
+        self.span = SpanSelector(ax[1], onselect, 'horizontal', useblit=True,
+                                props=dict(alpha=0.5, facecolor='tab:blue'))
+
+        def confirm(event):
+            print("Button")
+            if self.current_span:
+                print(f"Confirming span: {self.current_span}")  # Debug output
+                self.spans.append(self.current_span)
+                if self.current_span_patch:
+                    self.current_span_patch.remove()
+                ax[1].axvspan(self.current_span[0], self.current_span[1], alpha=0.3, color='green')
+                self.current_span = None
+                self.current_span_patch = None
+                fig.canvas.draw_idle()
+                if len(self.spans) == num_stalks:
+                    save_stalks()
+                    plt.close(fig)
+            else:
+                print("No span selected to confirm")  # Debug output
+
+        def save_stalks():
+            os.makedirs(f'Results/Field/{self.date}/{self.stalk_type}/Stalk Clips', exist_ok=True)
+            for i, (tmin, tmax) in enumerate(self.spans):
+                mask = (self.time >= tmin) & (self.time <= tmax)
+                time_clip = self.time[mask]
+                force_clip = self.force[mask]
+                position_clip = self.position[mask]
+                df = pd.DataFrame({'Time': time_clip, 'Force': force_clip, 'Position': position_clip})
+                path = f'Results/Field/{self.date}/{self.stalk_type}/Stalk Clips/S{i+1:02d}_{self.test_num:02d}.csv'
+                df.to_csv(path, index=False)
+                print(f"Saved stalk {i+1} to {path}")  # Debug output
+
+        # Create Confirm button
+        ax_confirm = plt.axes([0.8, 0.025, 0.1, 0.075])
+        btn_confirm = Button(ax_confirm, 'Confirm')
+        btn_confirm.on_clicked(confirm)
+        def on_key(event):
+            if event.key == 'enter':
+                confirm(event)
+
+        # # Ensure the figure remains interactive
+        fig.canvas.mpl_connect('close_event', lambda event: print(f"Closed window for Test {self.test_num}"))  # Debug
+        fig.canvas.mpl_connect('key_press_event', on_key)
+        # plt.ion()  # Enable interactive mode
+        plt.show()
+
 
 class TestResults:
     def __init__(self):
@@ -686,7 +900,7 @@ class TestResults:
         plt.show()
 
 
-
+# Automatic processing
 def show_force_position(dates, test_nums, show_accels):
     for date in dates:
         for test_num in test_nums:
@@ -704,7 +918,7 @@ def show_force_position(dates, test_nums, show_accels):
 
                 test.plot_force_position(view_stalks=True, show_accels=show_accels)
                 test.plot_section_stiffnesses()
-    plt.show()
+    # plt.show()
 
 def show_accels(dates, test_nums):
     for date in dates:
@@ -788,10 +1002,96 @@ def show_day_results(date, correlation_flag=False):
     # plt.plot(np.linspace(0, max, 10), np.linspace(0, max, 10), c='blue', linewidth=0.5, label='1:1')
     # plt.legend()
 
+# Interactive processing
+def display_and_clip_tests(dates, test_nums, show_accels=False, num_stalks=0):
+    for date in dates:
+        for test_num in test_nums:
+            test = FieldStalkSection(date=date, test_num=test_num)
+            if test.exist:
+                print(test_num)
+                test.smooth_raw_data()
+                test.shift_initials(time_cutoff=1.0)
+                test.calc_force_position()
+                test.differentiate_force_position()
+                test.differentiate_force_position_DT()
+                # test.calc_angles()
+                # test.plot_force_position(view_stalks=True, show_accels=show_accels)
+                test.interactive_clip_and_save(num_stalks)
+    plt.show()
+
+def interactive_process_clipped_stalks(dates):
+    for date in dates:
+        folder = f'Results/Field/{date}'
+        if not os.path.exists(folder):
+            continue
+        stalk_types = [d for d in os.listdir(folder) if os.path.isdir(os.path.join(folder, d))]
+        for stalk_type in stalk_types:
+            response = input(f"Process stalk type '{stalk_type}'? (y/n): ").strip().lower()
+            if response != 'y':
+                continue
+            # Load one section for height, yaw, max_position
+            for test_num in range(1, 11):
+                section = FieldStalkSection(date=date, test_num=test_num)
+                if section.exist:
+                    break
+            else:
+                continue
+            dummy_section = type('DummySection', (), {'height': section.height, 'yaw': section.yaw, 'max_position': section.max_position})
+            
+            subfolder = os.path.join(folder, os.path.join(stalk_type, 'Stalk Clips'))
+            csv_files = [f for f in os.listdir(subfolder) if f.endswith('.csv')]
+            
+            stalk_dict = {}
+            for csv_file in csv_files:
+                parts = csv_file[:-4].split('_')
+                stalk_num = int(parts[0][1:])
+                test_num = int(parts[1])
+                path = os.path.join(subfolder, csv_file)
+                df = pd.read_csv(path)
+                time = df['Time'].to_numpy()
+                force = df['Force'].to_numpy()
+                position = df['Position'].to_numpy()
+                stalk = StalkInteraction(time, force, position, dummy_section)
+                if stalk_num not in stalk_dict:
+                    stalk_dict[stalk_num] = []
+                stalk_dict[stalk_num].append((test_num, stalk))
+            
+            # Process each stalk and collect results
+            for stalk_num, stalks in sorted(stalk_dict.items()):
+                results = []
+                for test_num, stalk in sorted(stalks):
+                    stalk.interactive_calc_stiffness(stalk_num, test_num, date, stalk_type)
+                    results.append({
+                        'Stalk': f'S{stalk_num:02d}',
+                        'Test': f'Test_{test_num:02d}',
+                        'stiffness': stalk.stiffness
+                    })
+                
+                # Create DataFrame and pivot to have tests as columns
+                results_df = pd.DataFrame(results)
+                pivoted_df = results_df.pivot(index='Stalk', columns='Test', values='stiffness').reset_index()
+
+                # Calculate average and standard deviation across test columns
+                test_columns = [col for col in pivoted_df.columns if col.startswith('Test_')]
+                pivoted_df['Average'] = pivoted_df[test_columns].mean(axis=1)
+                pivoted_df['Median'] = pivoted_df[test_columns].median(axis=1)
+                pivoted_df['Std_Dev'] = pivoted_df[test_columns].std(axis=1)
+                
+                # Save to CSV in Stiffnesses subfolder
+                subfolder = os.path.join(folder, stalk_type)
+                os.makedirs(subfolder, exist_ok=True)
+                results_path = os.path.join(subfolder, f'stiffness_{date}_{stalk_type}.csv')
+                
+                # Append to CSV (mode='a' adds to bottom, header only if file is new)
+                pivoted_df.to_csv(results_path, mode='a', index=False, header=not os.path.exists(results_path))
+
 if __name__ == '__main__':
-    # show_force_position(dates=['08_22'], test_nums=range(1, 10+1), show_accels=False)
+    # show_force_position(dates=['08_22'], test_nums=range(11, 20+1), show_accels=False)
+    # display_and_clip_tests(dates=['08_22'], test_nums=range(11, 20+1), num_stalks=10)
+    interactive_process_clipped_stalks(dates=['08_22'])
+
     # show_accels(dates=['08_13'], test_nums=[3])
-    process_and_store_section(dates=['08_22'], test_nums=range(1, 10+1))
+    # process_and_store_section(dates=['08_22'], test_nums=range(1, 10+1))
     # show_section_results(dates=['08_07'], test_nums=[21], correlation_flag=True)
     # show_day_results(date='08_07', correlation_flag=True)
     
