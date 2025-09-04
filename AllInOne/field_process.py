@@ -214,7 +214,9 @@ class StalkInteraction:
         self.position = np.array([self.position[i] for i in keep_indices])
 
         # Create interactive plot with complete data
-        fig, ax = plt.subplots(2, 2, sharex=False, figsize=(10, 10))#, gridspec_kw={'height_ratios': [1, 1], 'width_ratios': [1, 1]})
+        fig, ax = plt.subplots(2, 2, sharex=False, figsize=(9, 9))#, gridspec_kw={'height_ratios': [1, 1], 'width_ratios': [1, 1]})
+        fig_manager = plt.get_current_fig_manager()
+        fig_manager.window.setGeometry(100, 100, 900, 900)
         ax[1, 0].remove()
         ax[1, 1].remove()
         ax_bottom = fig.add_subplot(212, sharex=None, sharey=None) # Create a new full-width subplot for bottom row
@@ -899,6 +901,35 @@ class TestResults:
 
         plt.show()
 
+    def show_results_interactive(self, filepath, correlation_flag=True):
+        # Normalize filepath and extract components
+        filepath = os.path.normpath(filepath); parts = filepath.split(os.sep)
+        date = parts[2]; stalk_type = parts[3]
+
+        # Construct the CSV file path
+        d_path = os.path.join(filepath, f'darling_{date}_{stalk_type}.csv')
+        r_path = os.path.join(filepath, f'stiffness_{date}_{stalk_type}.csv')
+        
+        # Read the CSV files
+        darling_df = pd.read_csv(d_path, index_col=0); rodney_df = pd.read_csv(r_path, index_col=0)
+        stalks_results = [rodney_df.loc[stalk].dropna().to_numpy() for stalk in rodney_df.index]
+        
+        plt.figure()
+        for i, stalk in enumerate(stalks_results):
+            plt.boxplot(stalk, positions=[i])
+
+        if correlation_flag:
+            d_means = darling_df['Mean']; d_medians = darling_df['Median']; d_stds = darling_df['Std_Dev']
+            r_means = rodney_df['Mean']; r_medians = rodney_df['Median']; r_stds = rodney_df['Std_Dev']
+            
+            slope, inter, r, _, _ = linregress(d_medians, r_medians)
+            
+            plt.figure()
+            plt.scatter(d_medians, r_medians)
+            plt.plot(d_medians, d_medians, c='black', linewidth=0.5)
+            plt.plot(d_medians, slope*np.array(d_medians) + inter, c='orange', linewidth='0.5')
+            plt.title(f'Date: {date}, Section: {stalk_type}\n'+ rf'$R^2$: {r**2:.4f}, Slope: {slope:.3f}')
+    
 
 # Automatic processing
 def show_force_position(dates, test_nums, show_accels):
@@ -961,8 +992,6 @@ def show_section_results(dates, test_nums, correlation_flag=False):
 def show_day_results(date, correlation_flag=False):
     import re
     sections = []
-
-
     folder = r'Results'
     for filename in os.listdir(folder):
         if filename.endswith(".json") and date in filename:
@@ -1073,7 +1102,7 @@ def interactive_process_clipped_stalks(dates):
 
                 # Calculate average and standard deviation across test columns
                 test_columns = [col for col in pivoted_df.columns if col.startswith('Test_')]
-                pivoted_df['Average'] = pivoted_df[test_columns].mean(axis=1)
+                pivoted_df['Mean'] = pivoted_df[test_columns].mean(axis=1)
                 pivoted_df['Median'] = pivoted_df[test_columns].median(axis=1)
                 pivoted_df['Std_Dev'] = pivoted_df[test_columns].std(axis=1)
                 
@@ -1085,10 +1114,78 @@ def interactive_process_clipped_stalks(dates):
                 # Append to CSV (mode='a' adds to bottom, header only if file is new)
                 pivoted_df.to_csv(results_path, mode='a', index=False, header=not os.path.exists(results_path))
 
+def show_section_results_interactive(dates, stalk_types, correlation_flag=False):
+    # Setup section on a date and verify all files are present
+    sect_res = TestResults()
+    for date in dates:
+        parent_folder = rf'Results\Field\{date}'
+        if not os.path.exists(parent_folder):
+            print(f'No results for date {date}')
+            continue
+        
+        for stalk_type in stalk_types:
+            subfolder = os.path.join(parent_folder, stalk_type)
+            if not os.path.exists(subfolder):
+                print(f'No results for type {stalk_type} on date {date}')
+                continue
+            if not (all(os.path.exists(os.path.join(subfolder, x)) for x in ['Stalk Clips', 'Stalk Traces']) and 
+                any(f.startswith('darling') for f in os.listdir(subfolder)) and 
+                any(f.startswith('stiffness') for f in os.listdir(subfolder))):
+                print(f'Required folders or files missing in subfolder {subfolder}')
+                continue
+
+            sect_res.show_results_interactive(subfolder, correlation_flag=True)
+
+def show_day_results_interactive(dates, stalk_types, n=0):
+    # Setup section on a date and verify all files are present
+    for date in dates:
+        parent_folder = rf'Results\Field\{date}'
+        if not os.path.exists(parent_folder):
+            print(f'No results for date {date}')
+            continue
+
+        all_d_medians = []; all_r_medians = []
+        for stalk_type in stalk_types:
+            subfolder = os.path.join(parent_folder, stalk_type)
+            if not os.path.exists(subfolder):
+                print(f'No results for type {stalk_type} on date {date}')
+                continue
+            if not (all(os.path.exists(os.path.join(subfolder, x)) for x in ['Stalk Clips', 'Stalk Traces']) and 
+                any(f.startswith('darling') for f in os.listdir(subfolder)) and 
+                any(f.startswith('stiffness') for f in os.listdir(subfolder))):
+                print(f'Required folders or files missing in subfolder {subfolder}')
+                continue
+
+            d_path = os.path.join(subfolder, f'darling_{date}_{stalk_type}.csv')
+            r_path = os.path.join(subfolder, f'stiffness_{date}_{stalk_type}.csv')
+            
+            # Read the CSV files
+            darling_df = pd.read_csv(d_path, index_col=0); rodney_df = pd.read_csv(r_path, index_col=0)
+            stalks_results = [rodney_df.loc[stalk].dropna().to_numpy() for stalk in rodney_df.index]
+            d_means = darling_df['Mean']; d_medians = darling_df['Median']; d_stds = darling_df['Std_Dev']
+            r_means = rodney_df['Mean']; r_medians = rodney_df['Median']; r_stds = rodney_df['Std_Dev']
+            all_d_medians.extend(d_medians); all_r_medians.extend(r_medians)
+
+            plt.figure(300+n)
+            plt.scatter(d_medians, r_medians, label=f'{stalk_type}')
+
+        slope, inter, r, _, _ = linregress(all_d_medians, all_r_medians)
+        plt.figure(300+n)
+        plt.plot(all_d_medians, all_d_medians, c='black', linewidth=0.5)
+        plt.plot(all_d_medians, slope*np.array(all_d_medians) + inter, c='orange', linewidth='0.5')
+        plt.title(f'Date: {date}\n'+ rf'$R^2$: {r**2:.4f}, Slope: {slope:.3f}')
+        plt.xlabel(r'Darling Stiffness (N/$m^2$)'); plt.ylabel(r'Rodney Stiffness (N/$m^2$)')
+        plt.axis('equal')
+        plt.legend()
+
+
 if __name__ == '__main__':
-    # show_force_position(dates=['08_22'], test_nums=range(11, 20+1), show_accels=False)
-    # display_and_clip_tests(dates=['08_22'], test_nums=range(11, 20+1), num_stalks=10)
-    interactive_process_clipped_stalks(dates=['08_22'])
+    # show_force_position(dates=['08_22'], test_nums=range(81, 90+1), show_accels=False)
+    # display_and_clip_tests(dates=['08_22'], test_nums=range(81, 90+1), num_stalks=3)
+    # interactive_process_clipped_stalks(dates=['08_22'])
+    # show_section_results_interactive(dates=['08_22'], stalk_types=['7-B Iso Alt'])
+    show_day_results_interactive(dates=['08_22'], stalk_types=['7-A Iso', '6-A Iso', '10-A Iso', '8-C Iso', '7-B Iso'])
+    # show_day_results_interactive(dates=['08_22'], stalk_types=['10-A', '8-C', '7-B'], n=1)
 
     # show_accels(dates=['08_13'], test_nums=[3])
     # process_and_store_section(dates=['08_22'], test_nums=range(1, 10+1))
