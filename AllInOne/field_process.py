@@ -929,6 +929,7 @@ class TestResults:
             plt.plot(d_medians, d_medians, c='black', linewidth=0.5)
             plt.plot(d_medians, slope*np.array(d_medians) + inter, c='orange', linewidth='0.5')
             plt.title(f'Date: {date}, Section: {stalk_type}\n'+ rf'$R^2$: {r**2:.4f}, Slope: {slope:.3f}')
+            plt.axis('equal')
     
 
 # Automatic processing
@@ -1180,11 +1181,14 @@ def show_day_results_interactive(dates, stalk_types, n=0):
 
 
 if __name__ == '__main__':
-    # show_force_position(dates=['08_22'], test_nums=range(81, 90+1), show_accels=False)
-    # display_and_clip_tests(dates=['08_22'], test_nums=range(81, 90+1), num_stalks=3)
-    # interactive_process_clipped_stalks(dates=['08_22'])
-    # show_section_results_interactive(dates=['08_22'], stalk_types=['7-B Iso Alt'])
-    show_day_results_interactive(dates=['08_22'], stalk_types=['7-A Iso', '6-A Iso', '10-A Iso', '8-C Iso', '7-B Iso'])
+    # show_force_position(dates=['08_07'], test_nums=range(41, 50+1), show_accels=False)
+    # display_and_clip_tests(dates=['08_07'], test_nums=range(47, 50+1), num_stalks=13)
+    # interactive_process_clipped_stalks(dates=['08_07'])
+    show_section_results_interactive(dates=['08_07'], stalk_types=['15-A WE'])
+    show_day_results_interactive(dates=['08_07'], stalk_types=['11-B WE', '12-C WE', '13-B WE'])
+    show_day_results_interactive(dates=['08_07'], stalk_types=['11-B WE', '12-C WE', '13-B WE', '15-A WE'], n=1)
+
+    # show_day_results_interactive(dates=['08_22'], stalk_types=['7-A Iso', '6-A Iso', '10-A Iso', '8-C Iso', '7-B Iso', '10-A', '8-C', '7-B'])
     # show_day_results_interactive(dates=['08_22'], stalk_types=['10-A', '8-C', '7-B'], n=1)
 
     # show_accels(dates=['08_13'], test_nums=[3])
