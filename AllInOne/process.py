@@ -19,12 +19,13 @@ class StalkInteraction:
         self.force = force
         self.position = position
         self.fits = {}
-        # self.stiffness = {}
         self.height = section.height# * 0.885
-        self.yaw =np.radians(25.8)# section.yaw# * 1.48
+        self.yaw = section.yaw# * 1.48
 
         # Force vs deflection
-        self.pos_x = (section.max_position - self.position)*np.sin(self.yaw)
+        alpha = np.radians(38.0)
+        self.pos_x = (section.max_position - self.position)*np.sin(self.yaw)/np.cos(alpha)
+        # self.force = self.force/np.cos(self.yaw - alpha)
 
     def filter_data(self, time, force, position, pos_x, force_D_pos_x):
         count = 0
@@ -102,6 +103,7 @@ class StalkInteraction:
         count = self.filter_data(self.time, self.force, self.position, self.pos_x, self.force_D_pos_x)
         self.clean_FX_data()
         # self.plot_filtered_data(count)
+
         
         self.fits['time'] = self.time_filt
         self.fits['force'] = np.polyval([self.slope_f, self.intercept_f], self.time_filt)
@@ -189,13 +191,13 @@ class StalkInteraction:
 
 
 class LabStalkRow:
-    def __init__(self, date, test_num, min_force_rate=-0.5, pos_accel_tol=0.8, force_accel_tol=700):
+    def __init__(self, date, test_num, min_force_rate=-0.5, pos_accel_tol=1.0, force_accel_tol=700):
         # These params set the filter bounds for identifying which portions of the data are stalk interactions. These are ideally straight lines, increasing in
         # force and decreasing in position. 
             # this window should be a bit wider than the physical sensor
         self.min_position = 5*1e-2  # centimeters, location of 2nd strain gauge
         self.max_position = 18*1e-2 # centimeters, location of beam end
-        self.min_force = 1 # newton, easily cut out the spaces between stalks. Rejects noisy detection regime
+        self.min_force = 0.5 # newton, easily cut out the spaces between stalks. Rejects noisy detection regime
         self.min_force_rate = min_force_rate    # newton/sec, only look at data where the stalk is being pushed outward
         self.max_force_rate = 70                # newton/sec, reject stalk first falling onto sensor beam
         self.max_pos_rate = 0.05                # m/sec, only look at data where stalk is moving forward (decreasing) on sensor beam, allow some jitter
@@ -713,17 +715,24 @@ class LabStalkRow:
         ax[1].axhline(0, c='red', linewidth=0.3)
         ax[1].axhline(-1, c='red', linewidth=0.3)
 
-def boxplot_data(rodney_config, date=None, stalk_type=None, plot_num=20):
+def boxplot_data(rodney_config, date=None, stalk_type=None, plot_num=20, offset=None, height=None):
     results_df = pd.read_csv(r'Results\results.csv')
     
     if not date == None:
         results_df = results_df[results_df['Date'] == date]
     if not stalk_type == None:
         results_df = results_df[results_df['stalk array (lo med hi)'] == stalk_type]
+    if not offset == None:
+        results_df = results_df[results_df['sensor offset (cm to gauge 2)'] == offset]
+    if not height == None:
+        results_df = results_df[results_df['sensor height (cm)'] == height]
     config_results = results_df[results_df['rodney configuration'] == rodney_config]
     offset = config_results['sensor offset (cm to gauge 2)'].iloc[0]
-    print(offset)
+    height= config_results['sensor height (cm)'].iloc[0]
+    print(offset, height)
 
+
+    
     lo_results = config_results[config_results['stalk array (lo med hi)'] == 'lo']
     med_results = config_results[config_results['stalk array (lo med hi)'] == 'med']
     hi_results = config_results[config_results['stalk array (lo med hi)'] == 'hi']
@@ -736,7 +745,7 @@ def boxplot_data(rodney_config, date=None, stalk_type=None, plot_num=20):
     med_mean = np.mean(med_stats.loc['mean'])
 
     plt.figure(plot_num)
-    plt.title(fr'{rodney_config}, Offset: {offset}cm, Avg: {med_mean:.2f} N/$m^2$')
+    plt.title(fr'{rodney_config}, Offset: {offset}cm, Height: {height}cm, Avg: {med_mean:.2f} N/$m^2$')
     plt.ylabel('Flexural Stiffness (N/m^2)')
     for _, row in lo_EIs.iloc[2:].iterrows():
         plt.scatter(range(1, len(row) + 1), row, c='red', s=2)
@@ -759,7 +768,7 @@ def boxplot_data(rodney_config, date=None, stalk_type=None, plot_num=20):
                    medianprops=dict(color='black'))
     plt.ylim(0, 50)
 
-def get_stats(rodney_config, date=None, stalk_type=None, plot_num=None):
+def get_stats(rodney_config, date=None, stalk_type=None, plot_num=None, offset=None, height=None):
     def get_ci(data, type_mean, confidence=0.95):
         n = len(data)
         mean = np.mean(data)
@@ -774,6 +783,10 @@ def get_stats(rodney_config, date=None, stalk_type=None, plot_num=None):
         results_df = results_df[results_df['Date'] == date]
     if not stalk_type == None:
         results_df = results_df[results_df['stalk array (lo med hi)'] == stalk_type]
+    if not offset == None:
+        results_df = results_df[results_df['sensor offset (cm to gauge 2)'] == offset]
+    if not height == None:
+        results_df = results_df[results_df['sensor height (cm)'] == height]
     config_results = results_df[results_df['rodney configuration'] == rodney_config]
     lo_results = config_results[config_results['stalk array (lo med hi)'] == 'lo']
     med_results = config_results[config_results['stalk array (lo med hi)'] == 'med']
@@ -927,10 +940,10 @@ def correlation(rodney_config, date=None, stalk_type=None):
     plt.scatter(darling_medians, rodney_medians, label=fr'Median $R^2$: {r**2:.4f} Slope: {slope:.3f}, Int: {inter:.2f}')
 
     plt.plot(darling_medians, darling_medians, c='blue', linewidth='0.5')
-    plt.xlabel('Darling Stiffness')
-    plt.ylabel('Rodney Stiffness')
+    plt.xlabel(r'Darling Stiffness (N/$m^2$)')
+    plt.ylabel(r'Hi-STIFS Stiffness (N/$m^2$)')
     plt.axis('equal')
-    plt.legend()
+    plt.title(f'Date: {date}\n'+ rf'Median $R^2$: {r**2:.4f}, Slope: {slope:.3f}')
     plt.show()
 
 
@@ -938,8 +951,8 @@ if __name__ == "__main__":
     local_run_flag = True
     
     '''Batch run of same configuration'''
-    for i in range(141, 150+1):
-        process_data(date='08_21', test_num=f'{i}', view=True, overwrite=True)
+    # for i in range(1, 15+1):
+    #     process_data(date='08_13', test_num=f'{i}', view=True, overwrite=True)
     # show_force_position(dates=['08_06'], test_nums=[1])
 
     # boxplot_data(rodney_config='Integrated Beam Prototype 1', date='07_03', plot_num=104)
@@ -950,7 +963,7 @@ if __name__ == "__main__":
     # boxplot_data(rodney_config='Integrated Beam Printed Guide 1', date='07_16', plot_num=109)
     # boxplot_data(rodney_config='Integrated Beam Fillet 1', date='08_13', plot_num=110)
 
-    boxplot_data(rodney_config='Integrated Beam Fillet 1', date='08_21', plot_num=108)
+    # boxplot_data(rodney_config='Integrated Beam Fillet 1', date='08_21', plot_num=108, offset=6.4, height=80.3)
     # boxplot_data(rodney_config='Integrated Beam Fillet 1 Normal', date='08_21', plot_num=109)
     '''end batch run'''
 
@@ -962,7 +975,7 @@ if __name__ == "__main__":
     # print('3 mean, median', get_stats(rodney_config='Integrated Beam Prototype 3', date='07_11', plot_num=208))
     # print('mean, median', get_stats(rodney_config='Integrated Beam Printed Guide 1', date='07_16', plot_num=209))
     # print('mean, median', get_stats(rodney_config='Integrated Beam Fillet 1', date='07_24', plot_num=210))
-    print('mean, median', get_stats(rodney_config='Integrated Beam Fillet 1', date='08_21', plot_num=211))
+    # print('mean, median', get_stats(rodney_config='Integrated Beam Fillet 1', date='08_21', plot_num=211, offset=6.4, height=80.3))
     # print('mean, median', get_stats(rodney_config='Integrated Beam Fillet 1 Normal', date='08_21', plot_num=212))
     '''end statistics'''
 
@@ -973,6 +986,6 @@ if __name__ == "__main__":
     # Optimize parameters for a specific configuration
     # optimize_parameters(dates=['07_16'], rodney_config='Integrated Beam Printed Guide 1')
 
-    # correlation(rodney_config='Integrated Beam Fillet 1', date='08_13')
+    correlation(rodney_config='Integrated Beam Fillet 1', date='08_13')
 
     plt.show()

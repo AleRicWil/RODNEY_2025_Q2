@@ -21,12 +21,14 @@ class StalkInteraction:
         self.force = force
         self.position = position
         self.fits = {}
-        # self.stiffness = {}
         self.height = section.height
         self.yaw = section.yaw
+        self.B = section.max_position
 
         # Force vs deflection
-        self.pos_x = (section.max_position - self.position)*np.sin(self.yaw)
+        self.alpha = np.radians(32.1)
+        self.pos_x = (self.B - self.position)*np.sin(self.yaw)/np.cos(self.alpha)
+        # self.force = self.force/np.cos(self.yaw - self.alpha)
 
     def filter_data(self, time, force, position, pos_x, force_D_pos_x):
         count = 0
@@ -227,6 +229,7 @@ class StalkInteraction:
 
         ax[0,0].scatter(self.time, self.force, s=5, c=indices, cmap=cmap, norm=norm)
         ax[0,0].set_ylabel('Force (N)')
+        ax[0,0].set_xlabel('Time (s)')
 
         ax[0,1].scatter(self.time, self.position, s=5, c=indices, cmap=cmap, norm=norm)
         # ax[0,1].set_ylim(0, 0.20)
@@ -330,6 +333,28 @@ class StalkInteraction:
         btn_reject.on_clicked(reject)
 
         plt.show(block=True)
+
+    def recalc_stiffness(self, stalk_num, test_num, date, stalk_type):
+        path = f'Results/Field/{date}/{stalk_type}/Stalk Traces/S{stalk_num:02d}_{test_num:02d}.csv'
+        if os.path.exists(path):
+            df = pd.read_csv(path)
+            self.time = df['Time'].to_numpy()
+            self.force = df['Force'].to_numpy()
+            self.position = df['Position'].to_numpy()
+
+            self.pos_x = (self.B - self.position)*np.sin(self.yaw)/np.cos(self.alpha)
+            # self.force = self.force/np.cos(self.yaw - self.alpha)
+            
+            if len(self.pos_x) >= 2:
+                slope, intercept, r, _, _ = stats.linregress(self.pos_x, self.force)
+                self.slope_fx = slope
+                self.intercept_fx = intercept
+                self.r_fx = r
+                self.stiffness = (slope * self.height**3) / 3
+            else:
+                self.stiffness = np.nan
+        else:
+            self.stiffness = np.nan
 
 
 class FieldStalkSection:
@@ -916,6 +941,7 @@ class TestResults:
         
         plt.figure()
         for i, stalk in enumerate(stalks_results):
+            print(stalk)
             plt.boxplot(stalk, positions=[i])
 
         if correlation_flag:
@@ -1049,7 +1075,7 @@ def display_and_clip_tests(dates, test_nums, show_accels=False, num_stalks=0):
                 test.interactive_clip_and_save(num_stalks)
     plt.show()
 
-def interactive_process_clipped_stalks(dates):
+def interactive_process_clipped_stalks(dates, select_spans=True):
     for date in dates:
         folder = f'Results/Field/{date}'
         if not os.path.exists(folder):
@@ -1090,7 +1116,10 @@ def interactive_process_clipped_stalks(dates):
             for stalk_num, stalks in sorted(stalk_dict.items()):
                 results = []
                 for test_num, stalk in sorted(stalks):
-                    stalk.interactive_calc_stiffness(stalk_num, test_num, date, stalk_type)
+                    if select_spans:
+                        stalk.interactive_calc_stiffness(stalk_num, test_num, date, stalk_type)
+                    else:
+                        stalk.recalc_stiffness(stalk_num, test_num, date, stalk_type)
                     results.append({
                         'Stalk': f'S{stalk_num:02d}',
                         'Test': f'Test_{test_num:02d}',
@@ -1181,15 +1210,16 @@ def show_day_results_interactive(dates, stalk_types, n=0):
 
 
 if __name__ == '__main__':
-    # show_force_position(dates=['08_07'], test_nums=range(41, 50+1), show_accels=False)
-    # display_and_clip_tests(dates=['08_07'], test_nums=range(47, 50+1), num_stalks=13)
-    # interactive_process_clipped_stalks(dates=['08_07'])
-    show_section_results_interactive(dates=['08_07'], stalk_types=['15-A WE'])
-    show_day_results_interactive(dates=['08_07'], stalk_types=['11-B WE', '12-C WE', '13-B WE'])
-    show_day_results_interactive(dates=['08_07'], stalk_types=['11-B WE', '12-C WE', '13-B WE', '15-A WE'], n=1)
+    # show_force_position(dates=['08_19'], test_nums=range(1, 10+1), show_accels=False)
+    # display_and_clip_tests(dates=['08_19'], test_nums=range(1, 10+1), num_stalks=9)
+    # interactive_process_clipped_stalks(dates=['08_22'], select_spans=False)
+    # show_section_results_interactive(dates=['08_07'], stalk_types=['15-A WE'])
+    # show_day_results_interactive(dates=['08_07'], stalk_types=['11-B WE', '12-C WE', '13-B WE'])
+    # show_day_results_interactive(dates=['08_07'], stalk_types=['11-B WE', '12-C WE', '13-B WE', '15-A WE'], n=1)
 
-    # show_day_results_interactive(dates=['08_22'], stalk_types=['7-A Iso', '6-A Iso', '10-A Iso', '8-C Iso', '7-B Iso', '10-A', '8-C', '7-B'])
-    # show_day_results_interactive(dates=['08_22'], stalk_types=['10-A', '8-C', '7-B'], n=1)
+    show_day_results_interactive(dates=['08_22'], stalk_types=['7-A Iso', '6-A Iso', '10-A Iso', '8-C Iso', '7-B Iso', '10-A', '8-C', '7-B'])
+    show_day_results_interactive(dates=['08_22'], stalk_types=['7-A Iso', '6-A Iso', '10-A Iso', '8-C Iso', '7-B Iso'], n=1)
+    show_day_results_interactive(dates=['08_22'], stalk_types=['10-A', '8-C', '7-B'], n=2)
 
     # show_accels(dates=['08_13'], test_nums=[3])
     # process_and_store_section(dates=['08_22'], test_nums=range(1, 10+1))
