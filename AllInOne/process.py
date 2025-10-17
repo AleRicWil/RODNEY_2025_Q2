@@ -923,6 +923,7 @@ def correlation(rodney_config, date=None, stalk_type=None):
     ]
 
     # Collect medians
+    # print(lo_EIs, med_EIs, hi_EIs)
     rodney_medians = []
     darling_medians = []
     for _, rodney_data, darling_data in datasets:
@@ -940,10 +941,35 @@ def correlation(rodney_config, date=None, stalk_type=None):
     plt.scatter(darling_medians, rodney_medians, label=fr'Median $R^2$: {r**2:.4f} Slope: {slope:.3f}, Int: {inter:.2f}')
 
     plt.plot(darling_medians, darling_medians, c='blue', linewidth='0.5')
-    plt.xlabel(r'Darling Stiffness (N/$m^2$)')
-    plt.ylabel(r'Hi-STIFS Stiffness (N/$m^2$)')
+    plt.xlabel(r'Darling Stiffness (N/$m^2$)', fontsize=14)
+    plt.ylabel(r'Hi-STIFS Stiffness (N/$m^2$)', fontsize=14)
     plt.axis('equal')
-    plt.title(f'Date: {date}\n'+ rf'Median $R^2$: {r**2:.4f}, Slope: {slope:.3f}')
+    # plt.title(f'Date: {date}\n'+ rf'Median $R^2$: {r**2:.4f}, Slope: {slope:.3f}')
+    plt.title(rf'Median $R^2$: {r**2:.4f}', fontsize=18)
+    # plt.show()
+
+    repeated_d_medians = []
+    all_r_values = []
+    for name, rodney_data, darling_data in datasets:
+        for stalk in rodney_data.columns:
+            rodney_vals = rodney_data[stalk].dropna().tolist()
+            darling_vals = darling_data[stalk].dropna()
+            if len(rodney_vals) > 0 and len(darling_vals) > 0:
+                d_median = np.median(darling_vals)
+                repeated_d_medians.extend([d_median] * len(rodney_vals))
+                all_r_values.extend(rodney_vals)
+
+    slope, inter, r, _, _ = linregress(repeated_d_medians, all_r_values)
+    plt.figure()
+    plt.plot(darling_medians, slope*darling_medians + inter, c='black', linewidth=0.5)
+    plt.scatter(repeated_d_medians, all_r_values, label=fr'Median $R^2$: {r**2:.4f} Slope: {slope:.3f}, Int: {inter:.2f}')
+
+    plt.plot(darling_medians, darling_medians, c='blue', linewidth='0.5')
+    plt.xlabel(r'Darling Stiffness (N/$m^2$)', fontsize=14)
+    plt.ylabel(r'Hi-STIFS Stiffness (N/$m^2$)', fontsize=14)
+    plt.axis('equal')
+    # plt.title(f'Date: {date}\n'+ rf'All $R^2$: {r**2:.4f}, Slope: {slope:.3f}')
+    plt.title(rf'All $R^2$: {r**2:.4f}', fontsize=18)
     plt.show()
 
 
@@ -953,7 +979,7 @@ if __name__ == "__main__":
     '''Batch run of same configuration'''
     # for i in range(1, 15+1):
     #     process_data(date='08_13', test_num=f'{i}', view=True, overwrite=True)
-    # show_force_position(dates=['08_06'], test_nums=[1])
+    show_force_position(dates=['08_21'], test_nums=[101], show_accels=False)
 
     # boxplot_data(rodney_config='Integrated Beam Prototype 1', date='07_03', plot_num=104)
     # boxplot_data(rodney_config='Integrated Beam Prototype 2', date='07_10', plot_num=105)
@@ -986,6 +1012,6 @@ if __name__ == "__main__":
     # Optimize parameters for a specific configuration
     # optimize_parameters(dates=['07_16'], rodney_config='Integrated Beam Printed Guide 1')
 
-    correlation(rodney_config='Integrated Beam Fillet 1', date='08_13')
+    # correlation(rodney_config='Integrated Beam Fillet 1', date='08_13')
 
     plt.show()

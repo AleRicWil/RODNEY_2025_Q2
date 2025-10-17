@@ -969,13 +969,13 @@ def show_force_position(dates, test_nums, show_accels):
                 test.calc_force_position()
                 test.differentiate_force_position()
                 test.differentiate_force_position_DT()
-                test.find_stalk_interaction()
-                test.collect_stalks()
-                test.calc_section_stiffnesses()
-                test.calc_angles()
+                # test.find_stalk_interaction()
+                # test.collect_stalks()
+                # test.calc_section_stiffnesses()
+                # test.calc_angles()
 
-                test.plot_force_position(view_stalks=True, show_accels=show_accels)
-                test.plot_section_stiffnesses()
+                test.plot_force_position(view_stalks=False, show_accels=show_accels)
+                # test.plot_section_stiffnesses()
     # plt.show()
 
 def show_accels(dates, test_nums):
@@ -1168,14 +1168,15 @@ def show_section_results_interactive(dates, stalk_types, correlation_flag=False)
 
 def show_day_results_interactive(dates, stalk_types, n=0):
     # Setup section on a date and verify all files are present
+    boxes = []
     for date in dates:
         parent_folder = rf'Results\Field\{date}'
         if not os.path.exists(parent_folder):
             print(f'No results for date {date}')
             continue
 
-        all_d_medians = []; all_r_medians = []
-        for stalk_type in stalk_types:
+        all_d_medians = []; all_r_medians = []; d_list = []; r_list = []
+        for i, stalk_type in enumerate(stalk_types):
             subfolder = os.path.join(parent_folder, stalk_type)
             if not os.path.exists(subfolder):
                 print(f'No results for type {stalk_type} on date {date}')
@@ -1191,35 +1192,78 @@ def show_day_results_interactive(dates, stalk_types, n=0):
             
             # Read the CSV files
             darling_df = pd.read_csv(d_path, index_col=0); rodney_df = pd.read_csv(r_path, index_col=0)
-            stalks_results = [rodney_df.loc[stalk].dropna().to_numpy() for stalk in rodney_df.index]
+            stalks_results = [rodney_df.loc[stalk][:-3].dropna().to_numpy() for stalk in rodney_df.index]
+            stalks_results = stalks_results
+            # print(stalks_results)
             d_means = darling_df['Mean']; d_medians = darling_df['Median']; d_stds = darling_df['Std_Dev']
             r_means = rodney_df['Mean']; r_medians = rodney_df['Median']; r_stds = rodney_df['Std_Dev']
             all_d_medians.extend(d_medians); all_r_medians.extend(r_medians)
+            # boxes.append(r_medians)
 
             plt.figure(300+n)
             plt.scatter(d_medians, r_medians, label=f'{stalk_type}')
+            section_vals = []
+            for i in range(len(stalks_results)):
+                section_vals.extend(stalks_results[i])
+                d_list.extend([d_medians[i]]*len(stalks_results[i])); r_list.extend(stalks_results[i])
+            boxes.append(section_vals)
+
+        # plt.figure(300+n)
+        # plt.scatter(d_list, r_list, s=10)
 
         slope, inter, r, _, _ = linregress(all_d_medians, all_r_medians)
+        # slope_a, inter_a, r_a, _, _ = linregress(d_list, r_list)
         plt.figure(300+n)
         plt.plot(all_d_medians, all_d_medians, c='black', linewidth=0.5)
-        plt.plot(all_d_medians, slope*np.array(all_d_medians) + inter, c='orange', linewidth='0.5')
-        plt.title(f'Date: {date}\n'+ rf'$R^2$: {r**2:.4f}, Slope: {slope:.3f}')
-        plt.xlabel(r'Darling Stiffness (N/$m^2$)'); plt.ylabel(r'Rodney Stiffness (N/$m^2$)')
+        plt.plot(all_d_medians, slope*np.array(all_d_medians) + inter, c='orange', linewidth=0.5)
+        # plt.plot(d_list, slope_a*np.array(d_list) + inter_a, c='purple', linewidth=0.5)
+        plt.title(f'Date: {date}\n'+ rf'$R^2$: {r**2:.4f}, Slope: {slope:.3f}')# | $R^2$: {r_a**2:.4f}, Slope: {slope_a:.3f}')
+        plt.xlabel(r'Darling Stiffness (N/$m^2$)'); plt.ylabel(r'Hi-STIFS Stiffness (N/$m^2$)')
         plt.axis('equal')
         plt.legend()
 
+    plt.figure(200+n)
+    labels = ['Vigor (cut) 15\u00B0', 'Vigor 15\u00B0', 'Ornamental 15\u00B0', 'Xtra Early 15\u00B0', 
+              'Popcorn 15\u00B0', 'Ornamental 20\u00B0', 'Vigor 20\u00B0', 'Popcorn 20\u00B0', 'Xtra Early 20\u00B0']
+    starts, news = [6, 6, 8], [2, 4, 6]
+    for start, new in zip(starts, news):
+        boxes.insert(new, boxes.pop(start)); labels.insert(new, labels.pop(start))
+    box = plt.boxplot(boxes, positions=range(len(boxes)), tick_labels=labels, patch_artist=True, notch=True)
+    colors = ['red']*3 + ['green']*2 + ['blue']*2 + ['orange']*2
+    for patch, color in zip(box['boxes'], colors):
+        patch.set_facecolor(color)
+    plt.ylabel(r'Flexural Stiffness (N/$m^2$)', fontsize=20)
+    plt.tick_params(axis='x', labelsize=14)
+
+    # plt.figure(250+n)
+    # new_boxes = [boxes[0]+boxes[1]+boxes[2]] + [boxes[3]+boxes[4]] + [boxes[5]+boxes[6]] + [boxes[7]+boxes[8]]
+    # new_labels = ['All Vigor', 'All Ornamental', 'All X-tra Early', 'All Popcorn']
+    # box = plt.boxplot(new_boxes, positions=range(len(new_boxes)), tick_labels=new_labels, patch_artist=True)
+    # new_colors = ['red'] + ['green'] + ['blue'] + ['orange']
+    # for patch, color in zip(box['boxes'], new_colors):
+    #     patch.set_facecolor(color)
+    # plt.ylabel(r'Flexural Stiffness (N/$m^2$)', fontsize=20)
+    # plt.tick_params(axis='x', labelsize=14)
+
+    # for variety, label in zip(new_boxes, new_labels):
+    #     print(f'{label} - Mean: {np.mean(variety):.2f}, StdDev: {np.std(variety):.2f} CV: {np.std(variety)/np.mean(variety):.2f}')
+
 
 if __name__ == '__main__':
-    # show_force_position(dates=['08_19'], test_nums=range(1, 10+1), show_accels=False)
-    # display_and_clip_tests(dates=['08_19'], test_nums=range(1, 10+1), num_stalks=9)
+    # show_force_position(dates=['08_05'], test_nums=range(1, 14+1), show_accels=True)
+    display_and_clip_tests(dates=['08_19'], test_nums=range(1, 10+1), num_stalks=9)
     # interactive_process_clipped_stalks(dates=['08_22'], select_spans=False)
     # show_section_results_interactive(dates=['08_07'], stalk_types=['15-A WE'])
     # show_day_results_interactive(dates=['08_07'], stalk_types=['11-B WE', '12-C WE', '13-B WE'])
     # show_day_results_interactive(dates=['08_07'], stalk_types=['11-B WE', '12-C WE', '13-B WE', '15-A WE'], n=1)
 
-    show_day_results_interactive(dates=['08_22'], stalk_types=['7-A Iso', '6-A Iso', '10-A Iso', '8-C Iso', '7-B Iso', '10-A', '8-C', '7-B'])
-    show_day_results_interactive(dates=['08_22'], stalk_types=['7-A Iso', '6-A Iso', '10-A Iso', '8-C Iso', '7-B Iso'], n=1)
-    show_day_results_interactive(dates=['08_22'], stalk_types=['10-A', '8-C', '7-B'], n=2)
+    # show_day_results_interactive(dates=['08_22'], stalk_types=['7-A Iso', '6-A Iso', '10-A Iso', '8-C Iso', '7-B Iso', '10-A', '8-C', '7-B'])
+    # show_day_results_interactive(dates=['08_22'], stalk_types=['7-A Iso', '7-B Iso', '6-A Iso', '10-A Iso', '8-C Iso'], n=1)
+    # show_day_results_interactive(dates=['08_22'], stalk_types=['10-A', '8-C', '7-B'], n=2)
+    # show_day_results_interactive(dates=['08_22'], stalk_types=['7-A Iso'], n=1)
+
+    # show_day_results_interactive(dates=['08_19'], stalk_types=['med'])
+    # show_day_results_interactive(dates=['08_22', '08_07'], stalk_types=['7-A Iso', '7-B Iso', '6-A Iso', '10-A Iso', '8-C Iso', '11-B WE', '12-C WE', '13-B WE', '15-A WE'], n=1)
 
     # show_accels(dates=['08_13'], test_nums=[3])
     # process_and_store_section(dates=['08_22'], test_nums=range(1, 10+1))

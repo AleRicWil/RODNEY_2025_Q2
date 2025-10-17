@@ -92,14 +92,18 @@ void setup() {
 void loop() {
   pca9546a_select(0);
   diff0 = ads1.getLastConversionResults();
-  // pca9546a_select(1);
-  // diff1 = ads2.getLastConversionResults();
-  diff1 = 0;
-  // pca9546a_select(2);
-  // diff2 = ads3.getLastConversionResults();
-  diff2 = 0;
+
   pca9546a_select(3);
-  diff3 = ads4.getLastConversionResults();
+  diff1 = ads4.getLastConversionResults();
+  // diff1 = 0;
+
+  pca9546a_select(2);
+  diff2 = ads3.getLastConversionResults();
+  // diff2 = 0;
+
+  pca9546a_select(1);
+  diff3 = ads2.getLastConversionResults();
+  // diff3 = 0;
 
   // readAccel(MPU1, AcX1, AcY1, AcZ1);
   // readAccel(MPU2, AcX2, AcY2, AcZ2);
@@ -129,8 +133,8 @@ void loop() {
 
   Serial.print(micros() - time_init); Serial.print(",");
   Serial.print(diff0); Serial.print(",");
-  // Serial.print(diff1); Serial.print(",");
-  // Serial.print(diff2); Serial.print(",");
+  Serial.print(diff1); Serial.print(",");
+  Serial.print(diff2); Serial.print(",");
   Serial.println(diff3); //Serial.print(",");
   //Serial.print(AcX1); Serial.print(",");
   //Serial.print(AcY1); Serial.print(",");
