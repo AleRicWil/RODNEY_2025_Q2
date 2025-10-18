@@ -1251,8 +1251,8 @@ def show_day_results_interactive(dates, stalk_types, n=0):
 
 if __name__ == '__main__':
     # show_force_position(dates=['08_05'], test_nums=range(1, 14+1), show_accels=True)
-    display_and_clip_tests(dates=['08_19'], test_nums=range(1, 10+1), num_stalks=9)
-    # interactive_process_clipped_stalks(dates=['08_22'], select_spans=False)
+    # display_and_clip_tests(dates=['08_21'], test_nums=range(101, 150+1), num_stalks=9)
+    interactive_process_clipped_stalks(dates=['08_21'], select_spans=True)
     # show_section_results_interactive(dates=['08_07'], stalk_types=['15-A WE'])
     # show_day_results_interactive(dates=['08_07'], stalk_types=['11-B WE', '12-C WE', '13-B WE'])
     # show_day_results_interactive(dates=['08_07'], stalk_types=['11-B WE', '12-C WE', '13-B WE', '15-A WE'], n=1)
