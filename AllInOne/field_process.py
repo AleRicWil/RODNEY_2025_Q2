@@ -1222,18 +1222,18 @@ def show_day_results_interactive(dates, stalk_types, n=0):
         plt.axis('equal')
         plt.legend()
 
-    plt.figure(200+n)
-    labels = ['Vigor (cut) 15\u00B0', 'Vigor 15\u00B0', 'Ornamental 15\u00B0', 'Xtra Early 15\u00B0', 
-              'Popcorn 15\u00B0', 'Ornamental 20\u00B0', 'Vigor 20\u00B0', 'Popcorn 20\u00B0', 'Xtra Early 20\u00B0']
-    starts, news = [6, 6, 8], [2, 4, 6]
-    for start, new in zip(starts, news):
-        boxes.insert(new, boxes.pop(start)); labels.insert(new, labels.pop(start))
-    box = plt.boxplot(boxes, positions=range(len(boxes)), tick_labels=labels, patch_artist=True, notch=True)
-    colors = ['red']*3 + ['green']*2 + ['blue']*2 + ['orange']*2
-    for patch, color in zip(box['boxes'], colors):
-        patch.set_facecolor(color)
-    plt.ylabel(r'Flexural Stiffness (N/$m^2$)', fontsize=20)
-    plt.tick_params(axis='x', labelsize=14)
+    # plt.figure(200+n)
+    # labels = ['Vigor (cut) 15\u00B0', 'Vigor 15\u00B0', 'Ornamental 15\u00B0', 'Xtra Early 15\u00B0', 
+    #           'Popcorn 15\u00B0', 'Ornamental 20\u00B0', 'Vigor 20\u00B0', 'Popcorn 20\u00B0', 'Xtra Early 20\u00B0']
+    # starts, news = [6, 6, 8], [2, 4, 6]
+    # for start, new in zip(starts, news):
+    #     boxes.insert(new, boxes.pop(start)); labels.insert(new, labels.pop(start))
+    # box = plt.boxplot(boxes, positions=range(len(boxes)), tick_labels=labels, patch_artist=True, notch=True)
+    # colors = ['red']*3 + ['green']*2 + ['blue']*2 + ['orange']*2
+    # for patch, color in zip(box['boxes'], colors):
+    #     patch.set_facecolor(color)
+    # plt.ylabel(r'Flexural Stiffness (N/$m^2$)', fontsize=20)
+    # plt.tick_params(axis='x', labelsize=14)
 
     # plt.figure(250+n)
     # new_boxes = [boxes[0]+boxes[1]+boxes[2]] + [boxes[3]+boxes[4]] + [boxes[5]+boxes[6]] + [boxes[7]+boxes[8]]
@@ -1251,14 +1251,14 @@ def show_day_results_interactive(dates, stalk_types, n=0):
 
 if __name__ == '__main__':
     # show_force_position(dates=['08_05'], test_nums=range(1, 14+1), show_accels=True)
-    # display_and_clip_tests(dates=['08_21'], test_nums=range(101, 150+1), num_stalks=9)
-    interactive_process_clipped_stalks(dates=['08_21'], select_spans=True)
+    # display_and_clip_tests(dates=['08_13'], test_nums=range(1, 15+1), num_stalks=9)
+    # interactive_process_clipped_stalks(dates=['08_13'], select_spans=True)
     # show_section_results_interactive(dates=['08_07'], stalk_types=['15-A WE'])
     # show_day_results_interactive(dates=['08_07'], stalk_types=['11-B WE', '12-C WE', '13-B WE'])
     # show_day_results_interactive(dates=['08_07'], stalk_types=['11-B WE', '12-C WE', '13-B WE', '15-A WE'], n=1)
 
     # show_day_results_interactive(dates=['08_22'], stalk_types=['7-A Iso', '6-A Iso', '10-A Iso', '8-C Iso', '7-B Iso', '10-A', '8-C', '7-B'])
-    # show_day_results_interactive(dates=['08_22'], stalk_types=['7-A Iso', '7-B Iso', '6-A Iso', '10-A Iso', '8-C Iso'], n=1)
+    show_day_results_interactive(dates=['08_22'], stalk_types=['6-A Iso', '7-A Iso', '7-B Iso', '7-B Iso Alt', '8-C Iso', '10-A Iso'], n=1)
     # show_day_results_interactive(dates=['08_22'], stalk_types=['10-A', '8-C', '7-B'], n=2)
     # show_day_results_interactive(dates=['08_22'], stalk_types=['7-A Iso'], n=1)
 
@@ -1270,6 +1270,30 @@ if __name__ == '__main__':
     # show_section_results(dates=['08_07'], test_nums=[21], correlation_flag=True)
     # show_day_results(date='08_07', correlation_flag=True)
     
-    
+
+    pd1 = pd.read_csv(r'Results/Field/08_13/lo/stiffness_08_13_lo.csv')
+    stiff_lo = pd1['Median'].to_numpy()
+    stdev_lo = pd1['Std_Dev'].to_numpy()
+    cv_lo = stdev_lo / stiff_lo
+    pd2 = pd.read_csv(r'Results/Field/08_13/med/stiffness_08_13_med.csv')
+    stiff_med = pd2['Median'].to_numpy()
+    stdev_med = pd2['Std_Dev'].to_numpy()
+    cv_med = stdev_med / stiff_med
+    pd3 = pd.read_csv(r'Results/Field/08_13/hi/stiffness_08_13_hi.csv')
+    stiff_hi = pd3['Median'].to_numpy()
+    stdev_hi = pd3['Std_Dev'].to_numpy()
+    cv_hi = stdev_hi / stiff_hi
+
+    plt.figure()
+    plt.errorbar(range(1, 10), stiff_lo, yerr=stdev_lo, fmt='none', ecolor='red', barsabove=True)
+    plt.scatter(range(1, 10), stiff_lo, c='red', s=10, label='Low')
+    plt.errorbar(range(1, 10), stiff_med, yerr=stdev_med, fmt='none', ecolor='green', barsabove=True)
+    plt.scatter(range(1, 10), stiff_med, c='green', s=10, label='Medium')
+    plt.errorbar(range(1, 10), stiff_hi, yerr=stdev_hi, fmt='none', ecolor='blue', barsabove=True)
+    plt.scatter(range(1, 10), stiff_hi, c='blue', s=10, label='High')
+    plt.xlabel('Stalk Number', fontsize=14)
+    plt.ylabel(r'Flexural Stiffness ($N/m^2$)', fontsize=14)
+    plt.legend()
+
     plt.show()
 
