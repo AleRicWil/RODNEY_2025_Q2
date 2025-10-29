@@ -1248,17 +1248,48 @@ def show_day_results_interactive(dates, stalk_types, n=0):
     # for variety, label in zip(new_boxes, new_labels):
     #     print(f'{label} - Mean: {np.mean(variety):.2f}, StdDev: {np.std(variety):.2f} CV: {np.std(variety)/np.mean(variety):.2f}')
 
+def bootstrap_diff_means(a, b, n_boot=10000, seed=42):
+    np.random.seed(seed)
+    boot_diffs = []
+    for _ in range(n_boot):
+        # Resample each group WITH replacement
+        boot_a = np.random.choice(a, size=len(a), replace=True)
+        boot_b = np.random.choice(b, size=len(b), replace=True)
+        boot_diffs.append(np.mean(boot_a) - np.mean(boot_b))
+    return np.array(boot_diffs)
+
+def bootstrap_strain_test(group1, group2, alpha=0.05, n_boot=10000, method='BCa'):
+    import scipy.stats as stats
+    
+    print(f"Group 1: n={len(group1)}, mean={np.mean(group1):.2f}")
+    print(f"Group 2: n={len(group2)}, mean={np.mean(group2):.2f}")
+    
+    if method == 'percentile':
+        boot_diffs = bootstrap_diff_means(group1, group2, n_boot)
+        ci = np.percentile(boot_diffs, [2.5, 97.5])
+        p = np.mean(np.abs(boot_diffs) >= np.abs(boot_diffs.mean()))
+    else:  # BCa
+        data = (group1, group2)
+        res = stats.bootstrap(data, lambda x,y: np.mean(x)-np.mean(y),
+                              n_resamples=n_boot, method='BCa')
+        ci = [res.confidence_interval.low, res.confidence_interval.high]
+        p = None  # BCa doesn't give p-value directly
+    
+    significant = (ci[0] > 0) or (ci[1] < 0)
+    print(f"95% CI: [{ci[0]:.2f}, {ci[1]:.2f}] µε")
+    print(f"Significant? {'YES' if significant else 'NO'} (α={alpha})")
+    return ci, significant
 
 if __name__ == '__main__':
     # show_force_position(dates=['08_05'], test_nums=range(1, 14+1), show_accels=True)
     # display_and_clip_tests(dates=['08_13'], test_nums=range(1, 15+1), num_stalks=9)
-    # interactive_process_clipped_stalks(dates=['08_13'], select_spans=True)
+    # interactive_process_clipped_stalks(dates=['08_22'], select_spans=True)
     # show_section_results_interactive(dates=['08_07'], stalk_types=['15-A WE'])
     # show_day_results_interactive(dates=['08_07'], stalk_types=['11-B WE', '12-C WE', '13-B WE'])
     # show_day_results_interactive(dates=['08_07'], stalk_types=['11-B WE', '12-C WE', '13-B WE', '15-A WE'], n=1)
 
     # show_day_results_interactive(dates=['08_22'], stalk_types=['7-A Iso', '6-A Iso', '10-A Iso', '8-C Iso', '7-B Iso', '10-A', '8-C', '7-B'])
-    show_day_results_interactive(dates=['08_22'], stalk_types=['6-A Iso', '7-A Iso', '7-B Iso', '7-B Iso Alt', '8-C Iso', '10-A Iso'], n=1)
+    # show_day_results_interactive(dates=['08_22'], stalk_types=['6-A Iso', '7-A Iso', '7-B Iso', '7-B Iso Alt', '8-C Iso', '10-A Iso'], n=1)
     # show_day_results_interactive(dates=['08_22'], stalk_types=['10-A', '8-C', '7-B'], n=2)
     # show_day_results_interactive(dates=['08_22'], stalk_types=['7-A Iso'], n=1)
 
@@ -1271,29 +1302,71 @@ if __name__ == '__main__':
     # show_day_results(date='08_07', correlation_flag=True)
     
 
-    pd1 = pd.read_csv(r'Results/Field/08_13/lo/stiffness_08_13_lo.csv')
-    stiff_lo = pd1['Median'].to_numpy()
-    stdev_lo = pd1['Std_Dev'].to_numpy()
-    cv_lo = stdev_lo / stiff_lo
-    pd2 = pd.read_csv(r'Results/Field/08_13/med/stiffness_08_13_med.csv')
-    stiff_med = pd2['Median'].to_numpy()
-    stdev_med = pd2['Std_Dev'].to_numpy()
-    cv_med = stdev_med / stiff_med
-    pd3 = pd.read_csv(r'Results/Field/08_13/hi/stiffness_08_13_hi.csv')
-    stiff_hi = pd3['Median'].to_numpy()
-    stdev_hi = pd3['Std_Dev'].to_numpy()
-    cv_hi = stdev_hi / stiff_hi
+    # pd1 = pd.read_csv(r'Results/Field/08_13/lo/stiffness_08_13_lo.csv')
+    # stiff_lo = pd1['Median'].to_numpy()
+    # stdev_lo = pd1['Std_Dev'].to_numpy()
+    # cv_lo = stdev_lo / stiff_lo
+    # pd2 = pd.read_csv(r'Results/Field/08_13/med/stiffness_08_13_med.csv')
+    # stiff_med = pd2['Median'].to_numpy()
+    # stdev_med = pd2['Std_Dev'].to_numpy()
+    # cv_med = stdev_med / stiff_med
+    # pd3 = pd.read_csv(r'Results/Field/08_13/hi/stiffness_08_13_hi.csv')
+    # stiff_hi = pd3['Median'].to_numpy()
+    # stdev_hi = pd3['Std_Dev'].to_numpy()
+    # cv_hi = stdev_hi / stiff_hi
 
-    plt.figure()
-    plt.errorbar(range(1, 10), stiff_lo, yerr=stdev_lo, fmt='none', ecolor='red', barsabove=True)
-    plt.scatter(range(1, 10), stiff_lo, c='red', s=10, label='Low')
-    plt.errorbar(range(1, 10), stiff_med, yerr=stdev_med, fmt='none', ecolor='green', barsabove=True)
-    plt.scatter(range(1, 10), stiff_med, c='green', s=10, label='Medium')
-    plt.errorbar(range(1, 10), stiff_hi, yerr=stdev_hi, fmt='none', ecolor='blue', barsabove=True)
-    plt.scatter(range(1, 10), stiff_hi, c='blue', s=10, label='High')
-    plt.xlabel('Stalk Number', fontsize=14)
-    plt.ylabel(r'Flexural Stiffness ($N/m^2$)', fontsize=14)
-    plt.legend()
+    # plt.figure()
+    # plt.errorbar(range(1, 10), stiff_lo, yerr=stdev_lo, fmt='none', ecolor='red', barsabove=True)
+    # plt.scatter(range(1, 10), stiff_lo, c='red', s=10, label='Low')
+    # plt.errorbar(range(1, 10), stiff_med, yerr=stdev_med, fmt='none', ecolor='green', barsabove=True)
+    # plt.scatter(range(1, 10), stiff_med, c='green', s=10, label='Medium')
+    # plt.errorbar(range(1, 10), stiff_hi, yerr=stdev_hi, fmt='none', ecolor='blue', barsabove=True)
+    # plt.scatter(range(1, 10), stiff_hi, c='blue', s=10, label='High')
+    # plt.xlabel('Stalk Number', fontsize=14)
+    # plt.ylabel(r'Flexural Stiffness ($N/m^2$)', fontsize=14)
+    # plt.legend()
+
+    pd1 = pd.read_csv(r'Results/Field/08_22/7-A Iso/stiffness_08_22_7-A Iso.csv')
+    pd2 = pd.read_csv(r'Results/Field/08_22/7-B Iso/stiffness_08_22_7-B Iso.csv')
+    pd3 = pd.read_csv(r'Results/Field/08_22/7-B Iso Alt/stiffness_08_22_7-B Iso Alt.csv')
+
+    stiff1 = pd1['Median'].to_numpy()
+    stdev1 = pd1['Std_Dev'].to_numpy()
+    cv1 = stdev1 / stiff1
+    stiff2 = pd2['Median'].to_numpy()
+    stdev2 = pd2['Std_Dev'].to_numpy()
+    cv2 = stdev2 / stiff2
+    stiff3 = pd3['Median'].to_numpy()
+    stdev3 = pd3['Std_Dev'].to_numpy()
+    cv3 = stdev3 / stiff3
+
+    cv_dirt = np.concatenate((cv1, cv2, cv3))
+
+    pd1 = pd.read_csv(r'Results/Field/08_22/7-B/stiffness_08_22_7-B.csv')
+    pd2 = pd.read_csv(r'Results/Field/08_22/8-C/stiffness_08_22_8-C.csv')
+    pd3 = pd.read_csv(r'Results/Field/08_22/10-A/stiffness_08_22_10-A.csv')
+
+    stiff1 = pd1['Median'].to_numpy()
+    stdev1 = pd1['Std_Dev'].to_numpy()
+    cv1 = stdev1 / stiff1
+    stiff2 = pd2['Median'].to_numpy()
+    stdev2 = pd2['Std_Dev'].to_numpy()
+    cv2 = stdev2 / stiff2
+    stiff3 = pd3['Median'].to_numpy()
+    stdev3 = pd3['Std_Dev'].to_numpy()
+    cv3 = stdev3 / stiff3
+
+    cv_inter = np.concatenate((cv1, cv2, cv3))
+    cv_inter = cv_inter[~np.isnan(cv_inter)]
+
+    cv_dirt = np.clip(cv_dirt, 0, 0.5)
+    cv_inter = np.clip(cv_inter, 0, 0.5)
+
+    print(cv_dirt)
+    # print(cv_inter)
+
+    t, p = stats.ttest_ind(cv_inter, cv_iso, equal_var=False)
+    print(t, p)
 
     plt.show()
 
