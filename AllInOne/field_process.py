@@ -1169,13 +1169,13 @@ def show_section_results_interactive(dates, stalk_types, correlation_flag=False)
 def show_day_results_interactive(dates, stalk_types, n=0):
     # Setup section on a date and verify all files are present
     boxes = []
+    all_d_medians = []; all_r_medians = []; d_list = []; r_list = []
     for date in dates:
         parent_folder = rf'Results\Field\{date}'
         if not os.path.exists(parent_folder):
             print(f'No results for date {date}')
             continue
 
-        all_d_medians = []; all_r_medians = []; d_list = []; r_list = []
         for i, stalk_type in enumerate(stalk_types):
             subfolder = os.path.join(parent_folder, stalk_type)
             if not os.path.exists(subfolder):
@@ -1200,8 +1200,8 @@ def show_day_results_interactive(dates, stalk_types, n=0):
             all_d_medians.extend(d_medians); all_r_medians.extend(r_medians)
             # boxes.append(r_medians)
 
-            plt.figure(300+n)
-            plt.scatter(d_medians, r_medians, label=f'{stalk_type}')
+            # plt.figure(300+n)
+            # plt.scatter(d_medians, r_medians, label=f'{stalk_type}')
             section_vals = []
             for i in range(len(stalks_results)):
                 section_vals.extend(stalks_results[i])
@@ -1211,74 +1211,57 @@ def show_day_results_interactive(dates, stalk_types, n=0):
         # plt.figure(300+n)
         # plt.scatter(d_list, r_list, s=10)
 
-        slope, inter, r, _, _ = linregress(all_d_medians, all_r_medians)
-        # slope_a, inter_a, r_a, _, _ = linregress(d_list, r_list)
-        plt.figure(300+n)
-        plt.plot(all_d_medians, all_d_medians, c='black', linewidth=0.5)
-        plt.plot(all_d_medians, slope*np.array(all_d_medians) + inter, c='orange', linewidth=0.5)
-        # plt.plot(d_list, slope_a*np.array(d_list) + inter_a, c='purple', linewidth=0.5)
-        plt.title(f'Date: {date}\n'+ rf'$R^2$: {r**2:.4f}, Slope: {slope:.3f}')# | $R^2$: {r_a**2:.4f}, Slope: {slope_a:.3f}')
-        plt.xlabel(r'Darling Stiffness (N/$m^2$)'); plt.ylabel(r'Hi-STIFS Stiffness (N/$m^2$)')
-        plt.axis('equal')
-        plt.legend()
+    # slope, inter, r, _, _ = linregress(all_d_medians, all_r_medians)
+    # # slope_a, inter_a, r_a, _, _ = linregress(d_list, r_list)
+    # plt.figure(300+n)
+    # plt.scatter(all_d_medians, all_r_medians, s=10, label=f'Stalk Stiffness')
+    # plt.plot(all_d_medians, all_d_medians, c='black', linewidth=0.5, label='1:1 Line')
+    # plt.plot(all_d_medians, slope*np.array(all_d_medians) + inter, c='red', linewidth=0.5, label=fr'Trendline - $R^2$: {r**2:.3f}')
+    # # plt.plot(d_list, slope_a*np.array(d_list) + inter_a, c='purple', linewidth=0.5)
+    # # plt.title(f'Date: {date}\n'+ rf'$R^2$: {r**2:.4f}, Slope: {slope:.3f}')# | $R^2$: {r_a**2:.4f}, Slope: {slope_a:.3f}')
+    # plt.title(f"'DARLING' & 'Hi-STIFFS A' Correlation", fontsize=16)
+    # plt.xlabel(r'DARLING Stiffness ($N/m^2$)', fontsize=14); plt.ylabel(r'Hi-STIFFS A Stiffness ($N/m^2$)', fontsize=14)
+    # plt.axis('equal')
+    # plt.legend()
 
-    # plt.figure(200+n)
-    # labels = ['Vigor (cut) 15\u00B0', 'Vigor 15\u00B0', 'Ornamental 15\u00B0', 'Xtra Early 15\u00B0', 
-    #           'Popcorn 15\u00B0', 'Ornamental 20\u00B0', 'Vigor 20\u00B0', 'Popcorn 20\u00B0', 'Xtra Early 20\u00B0']
-    # starts, news = [6, 6, 8], [2, 4, 6]
-    # for start, new in zip(starts, news):
-    #     boxes.insert(new, boxes.pop(start)); labels.insert(new, labels.pop(start))
-    # box = plt.boxplot(boxes, positions=range(len(boxes)), tick_labels=labels, patch_artist=True, notch=True)
-    # colors = ['red']*3 + ['green']*2 + ['blue']*2 + ['orange']*2
-    # for patch, color in zip(box['boxes'], colors):
-    #     patch.set_facecolor(color)
-    # plt.ylabel(r'Flexural Stiffness (N/$m^2$)', fontsize=20)
-    # plt.tick_params(axis='x', labelsize=14)
+    plt.figure(200+n)
+    labels = ['Vigor 1', 'Ornamental 1', 'Xtra Early 1', 
+              'White Hulless Popcorn 1', 'Ornamental 2', 'Vigor 2', 'White Hulless Popcorn 2', 'Xtra Early 2']
+    labels = ['1', '1', '1', '1', '2', '2', '2', '2']
+    starts, news = [1, 4, 3, 7, 6], [0, 1, 2, 3, 5]
+    for start, new in zip(starts, news):
+        boxes.insert(new, boxes.pop(start)); labels.insert(new, labels.pop(start))
+    box = plt.boxplot(boxes, positions=range(len(boxes)), tick_labels=labels, patch_artist=True, notch=True)
+    colors = ['red']*2 + ['green']*2 + ['blue']*2 + ['orange']*2
+    for patch, color in zip(box['boxes'], colors):
+        patch.set_facecolor(color)
+    plt.ylabel(r'Flexural Stiffness (N/$m^2$)', fontsize=14)
+    plt.xlabel('Method/Plot Pair', fontsize=14)
+    plt.title('Stalk Distribution by Variety', fontsize=16)
+    plt.tick_params(axis='x', labelsize=12)
+    # plt.xticks(rotation=20, ha='right')
+    legend_patches = [
+        plt.Rectangle((0,0),0.5,1, facecolor='red', label='Ornamental'),
+        plt.Rectangle((0,0),0.5,1, facecolor='green', label='Xtra Early'),
+        plt.Rectangle((0,0),0.5,1, facecolor='blue', label='Vigor Root'),
+        plt.Rectangle((0,0),0.5,1, facecolor='orange', label='White Hulless Popcorn')
+    ]
+    plt.legend(handles=legend_patches, loc='upper left', fontsize=10)
 
-    # plt.figure(250+n)
-    # new_boxes = [boxes[0]+boxes[1]+boxes[2]] + [boxes[3]+boxes[4]] + [boxes[5]+boxes[6]] + [boxes[7]+boxes[8]]
-    # new_labels = ['All Vigor', 'All Ornamental', 'All X-tra Early', 'All Popcorn']
-    # box = plt.boxplot(new_boxes, positions=range(len(new_boxes)), tick_labels=new_labels, patch_artist=True)
-    # new_colors = ['red'] + ['green'] + ['blue'] + ['orange']
-    # for patch, color in zip(box['boxes'], new_colors):
-    #     patch.set_facecolor(color)
-    # plt.ylabel(r'Flexural Stiffness (N/$m^2$)', fontsize=20)
-    # plt.tick_params(axis='x', labelsize=14)
+    plt.figure(250+n)
+    new_boxes = [boxes[0]+boxes[1]] + [boxes[2]+boxes[3]] + [boxes[4]+boxes[5]] + [boxes[6]+boxes[7]]
+
+    box = plt.boxplot(new_boxes, positions=range(len(new_boxes)), tick_labels=['']*4, patch_artist=True, notch=True)
+    new_colors = ['red'] + ['green'] + ['blue'] + ['orange']
+    for patch, color in zip(box['boxes'], new_colors):
+        patch.set_facecolor(color)
+    plt.ylabel(r'Flexural Stiffness (N/$m^2$)', fontsize=14)
+    plt.title('Stalk Distribution by Variety', fontsize=16)
+    plt.legend(handles=legend_patches, loc='upper left', fontsize=10)
 
     # for variety, label in zip(new_boxes, new_labels):
     #     print(f'{label} - Mean: {np.mean(variety):.2f}, StdDev: {np.std(variety):.2f} CV: {np.std(variety)/np.mean(variety):.2f}')
 
-def bootstrap_diff_means(a, b, n_boot=10000, seed=42):
-    np.random.seed(seed)
-    boot_diffs = []
-    for _ in range(n_boot):
-        # Resample each group WITH replacement
-        boot_a = np.random.choice(a, size=len(a), replace=True)
-        boot_b = np.random.choice(b, size=len(b), replace=True)
-        boot_diffs.append(np.mean(boot_a) - np.mean(boot_b))
-    return np.array(boot_diffs)
-
-def bootstrap_strain_test(group1, group2, alpha=0.05, n_boot=10000, method='BCa'):
-    import scipy.stats as stats
-    
-    print(f"Group 1: n={len(group1)}, mean={np.mean(group1):.2f}")
-    print(f"Group 2: n={len(group2)}, mean={np.mean(group2):.2f}")
-    
-    if method == 'percentile':
-        boot_diffs = bootstrap_diff_means(group1, group2, n_boot)
-        ci = np.percentile(boot_diffs, [2.5, 97.5])
-        p = np.mean(np.abs(boot_diffs) >= np.abs(boot_diffs.mean()))
-    else:  # BCa
-        data = (group1, group2)
-        res = stats.bootstrap(data, lambda x,y: np.mean(x)-np.mean(y),
-                              n_resamples=n_boot, method='BCa')
-        ci = [res.confidence_interval.low, res.confidence_interval.high]
-        p = None  # BCa doesn't give p-value directly
-    
-    significant = (ci[0] > 0) or (ci[1] < 0)
-    print(f"95% CI: [{ci[0]:.2f}, {ci[1]:.2f}] µε")
-    print(f"Significant? {'YES' if significant else 'NO'} (α={alpha})")
-    return ci, significant
 
 if __name__ == '__main__':
     # show_force_position(dates=['08_05'], test_nums=range(1, 14+1), show_accels=True)
@@ -1294,7 +1277,7 @@ if __name__ == '__main__':
     # show_day_results_interactive(dates=['08_22'], stalk_types=['7-A Iso'], n=1)
 
     # show_day_results_interactive(dates=['08_19'], stalk_types=['med'])
-    # show_day_results_interactive(dates=['08_22', '08_07'], stalk_types=['7-A Iso', '7-B Iso', '6-A Iso', '10-A Iso', '8-C Iso', '11-B WE', '12-C WE', '13-B WE', '15-A WE'], n=1)
+    show_day_results_interactive(dates=['08_22', '08_07'], stalk_types=['7-B Iso', '6-A Iso', '10-A Iso', '8-C Iso', '11-B WE', '12-C WE', '13-B WE', '15-A WE'], n=1)
 
     # show_accels(dates=['08_13'], test_nums=[3])
     # process_and_store_section(dates=['08_22'], test_nums=range(1, 10+1))
@@ -1326,47 +1309,47 @@ if __name__ == '__main__':
     # plt.ylabel(r'Flexural Stiffness ($N/m^2$)', fontsize=14)
     # plt.legend()
 
-    pd1 = pd.read_csv(r'Results/Field/08_22/7-A Iso/stiffness_08_22_7-A Iso.csv')
-    pd2 = pd.read_csv(r'Results/Field/08_22/7-B Iso/stiffness_08_22_7-B Iso.csv')
-    pd3 = pd.read_csv(r'Results/Field/08_22/7-B Iso Alt/stiffness_08_22_7-B Iso Alt.csv')
+    # pd1 = pd.read_csv(r'Results/Field/08_22/7-A Iso/stiffness_08_22_7-A Iso.csv')
+    # pd2 = pd.read_csv(r'Results/Field/08_22/7-B Iso/stiffness_08_22_7-B Iso.csv')
+    # pd3 = pd.read_csv(r'Results/Field/08_22/7-B Iso Alt/stiffness_08_22_7-B Iso Alt.csv')
 
-    stiff1 = pd1['Median'].to_numpy()
-    stdev1 = pd1['Std_Dev'].to_numpy()
-    cv1 = stdev1 / stiff1
-    stiff2 = pd2['Median'].to_numpy()
-    stdev2 = pd2['Std_Dev'].to_numpy()
-    cv2 = stdev2 / stiff2
-    stiff3 = pd3['Median'].to_numpy()
-    stdev3 = pd3['Std_Dev'].to_numpy()
-    cv3 = stdev3 / stiff3
+    # stiff1 = pd1['Median'].to_numpy()
+    # stdev1 = pd1['Std_Dev'].to_numpy()
+    # cv1 = stdev1 / stiff1
+    # stiff2 = pd2['Median'].to_numpy()
+    # stdev2 = pd2['Std_Dev'].to_numpy()
+    # cv2 = stdev2 / stiff2
+    # stiff3 = pd3['Median'].to_numpy()
+    # stdev3 = pd3['Std_Dev'].to_numpy()
+    # cv3 = stdev3 / stiff3
 
-    cv_dirt = np.concatenate((cv1, cv2, cv3))
+    # cv_dirt = np.concatenate((cv1, cv2, cv3))
 
-    pd1 = pd.read_csv(r'Results/Field/08_22/7-B/stiffness_08_22_7-B.csv')
-    pd2 = pd.read_csv(r'Results/Field/08_22/8-C/stiffness_08_22_8-C.csv')
-    pd3 = pd.read_csv(r'Results/Field/08_22/10-A/stiffness_08_22_10-A.csv')
+    # pd1 = pd.read_csv(r'Results/Field/08_22/7-B/stiffness_08_22_7-B.csv')
+    # pd2 = pd.read_csv(r'Results/Field/08_22/8-C/stiffness_08_22_8-C.csv')
+    # pd3 = pd.read_csv(r'Results/Field/08_22/10-A/stiffness_08_22_10-A.csv')
 
-    stiff1 = pd1['Median'].to_numpy()
-    stdev1 = pd1['Std_Dev'].to_numpy()
-    cv1 = stdev1 / stiff1
-    stiff2 = pd2['Median'].to_numpy()
-    stdev2 = pd2['Std_Dev'].to_numpy()
-    cv2 = stdev2 / stiff2
-    stiff3 = pd3['Median'].to_numpy()
-    stdev3 = pd3['Std_Dev'].to_numpy()
-    cv3 = stdev3 / stiff3
+    # stiff1 = pd1['Median'].to_numpy()
+    # stdev1 = pd1['Std_Dev'].to_numpy()
+    # cv1 = stdev1 / stiff1
+    # stiff2 = pd2['Median'].to_numpy()
+    # stdev2 = pd2['Std_Dev'].to_numpy()
+    # cv2 = stdev2 / stiff2
+    # stiff3 = pd3['Median'].to_numpy()
+    # stdev3 = pd3['Std_Dev'].to_numpy()
+    # cv3 = stdev3 / stiff3
 
-    cv_inter = np.concatenate((cv1, cv2, cv3))
-    cv_inter = cv_inter[~np.isnan(cv_inter)]
+    # cv_inter = np.concatenate((cv1, cv2, cv3))
+    # cv_inter = cv_inter[~np.isnan(cv_inter)]
 
-    cv_dirt = np.clip(cv_dirt, 0, 0.5)
-    cv_inter = np.clip(cv_inter, 0, 0.5)
+    # cv_dirt = np.clip(cv_dirt, 0, 0.5)
+    # cv_inter = np.clip(cv_inter, 0, 0.5)
 
-    print(cv_dirt)
-    # print(cv_inter)
+    # print(cv_dirt)
+    # # print(cv_inter)
 
-    t, p = stats.ttest_ind(cv_inter, cv_iso, equal_var=False)
-    print(t, p)
+    # t, p = stats.ttest_ind(cv_inter, cv_iso, equal_var=False)
+    # print(t, p)
 
     plt.show()
 
